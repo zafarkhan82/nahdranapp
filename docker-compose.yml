@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - nahdran-data:/app/data
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+
+volumes:
+  nahdran-data:
