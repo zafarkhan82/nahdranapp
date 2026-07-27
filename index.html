@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NAHDRAN</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fira+Sans:wght@400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--emaille:#1B3A93;--ink:#12161A;--pflaster:#EAE8E1;--weiss:#FFF;--signal:#FF4A0F;--grau:#7A766E;--linie:#D6D3CA;--display:"Anton",sans-serif;--body:"Fira Sans",system-ui,sans-serif;--mono:"Fira Mono",monospace}
+*{box-sizing:border-box;margin:0;padding:0}html,body,#root{height:100%}
+body{font-family:var(--body);color:var(--ink);background:var(--pflaster)}
+
+/* Shell */
+.app{max-width:480px;margin:0 auto;height:100%;display:flex;flex-direction:column;background:var(--pflaster);position:relative;overflow:hidden}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.tabs{flex:none;display:flex;background:var(--weiss);border-top:1px solid var(--linie);padding-bottom:env(safe-area-inset-bottom)}
+.tab{flex:1;background:none;border:0;padding:9px 2px 11px;cursor:pointer;color:var(--grau);display:flex;flex-direction:column;align-items:center;gap:3px;border-top:2.5px solid transparent;margin-top:-1px}
+.tab svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8}
+.tab span{font-size:10px;font-weight:500}
+.tab.on{color:var(--ink);border-top-color:var(--signal)}
+.badge{position:absolute;top:-2px;right:calc(50% - 16px);width:7px;height:7px;border-radius:50%;background:var(--signal)}
+
+/* Header */
+.hdr{background:var(--emaille);padding:12px 14px 10px;position:relative}
+.hdr::after{content:"";position:absolute;inset:5px;border:1.5px solid rgba(255,255,255,.5);border-radius:3px;pointer-events:none}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+.hdr h1{font-family:var(--display);font-size:28px;color:#fff;text-transform:uppercase;font-weight:400;line-height:.95}
+.hdr .sub{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:rgba(255,255,255,.7);text-transform:uppercase;margin-bottom:4px}
+.hdr .status{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.8);margin-top:5px;display:flex;gap:6px;align-items:center;position:relative;z-index:1}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--signal);flex:none}
+.hdr-btn{width:35px;height:35px;border-radius:50%;border:1.5px solid rgba(255,255,255,.5);background:transparent;color:#fff;cursor:pointer;display:grid;place-items:center}
+.hdr-btn:hover{background:rgba(255,255,255,.12)}
+.hdr-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+
+/* Chips */
+.chips-wrap{position:sticky;top:0;z-index:4;background:var(--pflaster);border-bottom:1px solid var(--linie);padding:9px 0 8px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:0 14px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;background:var(--weiss);border:1px solid var(--linie);border-radius:20px;padding:7px 12px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;display:flex;gap:5px;align-items:center}
+.chip:hover{border-color:var(--grau)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip .n{font-family:var(--mono);font-size:11px;opacity:.6}
+.chip.rad{background:transparent;border-style:dashed;font-family:var(--mono);font-size:12px}
+
+/* Cards */
+.feed{padding:14px 14px 6px;display:flex;flex-direction:column;gap:10px}
+.card{position:relative;width:100%;text-align:left;background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:11px;display:flex;gap:11px;cursor:pointer;font:inherit;color:inherit}
+.card:hover{border-color:var(--ink)}
+.ava{width:50px;height:50px;flex:none;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-size:18px;color:#fff}
+.c-body{flex:1;min-width:0}
+.c-cat{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--grau)}
+.c-body h3{font-size:14.5px;font-weight:600;line-height:1.2;margin:2px 0;padding-right:24px}
+.c-shop{font-size:12px;color:var(--grau);margin-bottom:5px}
+.c-meta{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px}
+.c-time{color:var(--grau)}
+.c-time.urgent{color:var(--signal);font-weight:700}
+.c-price{margin-left:auto;white-space:nowrap}
+.c-price s{color:var(--grau);margin-right:4px}
+.c-price b{font-weight:700}
+.fav-btn{position:absolute;top:7px;right:7px;width:28px;height:28px;border:0;background:none;cursor:pointer;color:var(--linie);display:grid;place-items:center}
+.fav-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9}
+.fav-btn:hover{color:var(--grau)}
+.fav-btn.on{color:var(--signal)}
+.fav-btn.on svg{fill:currentColor}
+
+/* Empty */
+.empty{padding:50px 28px;text-align:center}
+.empty h3{font-family:var(--display);font-size:21px;text-transform:uppercase;margin-bottom:8px}
+.empty p{color:var(--grau);font-size:13.5px;line-height:1.6;margin-bottom:14px}
+
+/* Detail sheet */
+.overlay{position:fixed;inset:0;background:rgba(10,12,14,.5);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:480px;max-height:92vh;background:var(--pflaster);border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden}
+.sheet-scroll{flex:1;overflow-y:auto}
+.sheet-foot{flex:none;padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:var(--weiss);border-top:1px solid var(--linie)}
+.d-hero{height:140px;display:grid;place-items:center;position:relative}
+.d-hero .init{font-family:var(--display);font-size:52px;color:rgba(255,255,255,.9)}
+.d-close{position:absolute;top:10px;left:10px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.9);cursor:pointer;font-size:16px}
+.d-fav{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.9);cursor:pointer;color:var(--grau);display:grid;place-items:center}
+.d-fav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9}
+.d-fav.on{color:var(--signal)}
+.d-fav.on svg{fill:currentColor}
+.d-body{padding:16px 14px 18px}
+.d-body h2{font-size:22px;font-weight:600;line-height:1.18;margin:6px 0 10px}
+.d-price{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);margin-bottom:4px}
+.d-price .big{font-family:var(--display);font-size:30px}
+.d-price s{font-size:14px;color:var(--grau)}
+.d-price .pct{background:var(--signal);color:#fff;font-size:11px;font-weight:700;padding:2px 6px;margin-left:auto}
+.facts{display:flex;border-top:1px solid var(--linie);border-bottom:1px solid var(--linie);margin:14px 0}
+.fact{flex:1;padding:10px 0;text-align:center;border-right:1px solid var(--linie)}
+.fact:last-child{border-right:0}
+.fact b{display:block;font-family:var(--mono);font-size:15px;font-weight:700;margin-bottom:2px}
+.fact b.urgent{color:var(--signal)}
+.fact span{font-size:9px;color:var(--grau);letter-spacing:.05em;text-transform:uppercase;font-family:var(--mono)}
+.terms{font-size:12.5px;color:var(--grau);line-height:1.6;list-style:disc;padding-left:16px}
+.terms li{margin-top:3px}
+.hint{font-family:var(--mono);font-size:10.5px;color:var(--grau);text-align:center;margin-top:8px}
+
+/* Buttons */
+.btn{width:100%;background:var(--signal);color:#fff;border:0;border-radius:2px;padding:14px;font-family:var(--body);font-size:15px;font-weight:600;cursor:pointer}
+.btn:hover{background:#E63F0B}
+.btn.sec{background:transparent;color:var(--ink);border:1.5px solid var(--ink)}
+.btn.sec:hover{background:rgba(0,0,0,.05)}
+.btn:disabled{background:var(--linie);color:var(--grau);cursor:default}
+
+/* Bon */
+.bon{background:var(--weiss);position:relative;padding:0 14px;margin:0 14px 16px}
+.bon-edge{height:9px;margin:0 -14px}
+.bon-edge.top{background:radial-gradient(circle at 5px 9px,var(--pflaster) 5px,transparent 5.5px) 0 0/13px 9px repeat-x}
+.bon-edge.bot{background:radial-gradient(circle at 5px 0,var(--pflaster) 5px,transparent 5.5px) 0 0/13px 9px repeat-x}
+.bon-in{padding:6px 0 12px;font-family:var(--mono);font-size:11.5px}
+.bon-head{display:flex;justify-content:space-between;padding-bottom:8px;border-bottom:1px dashed var(--linie)}
+.bon-head strong{font-family:var(--body);font-weight:600;font-size:13.5px}
+.bon h3{font-family:var(--body);font-size:16px;font-weight:600;margin:10px 0 3px}
+.bon .addr{color:var(--grau);margin-bottom:12px}
+.bon .timer-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px dashed var(--linie);border-bottom:1px dashed var(--linie)}
+.bon .timer-row b{font-size:15px;font-weight:700;letter-spacing:.04em}
+.bon .timer-row b.urgent{color:var(--signal)}
+.bon .code-area{text-align:center;padding:14px 0 4px}
+.bon .digits{font-size:22px;font-weight:700;letter-spacing:.24em;margin-bottom:8px}
+.bon .barcode{height:38px;display:flex;gap:2px;align-items:stretch;justify-content:center}
+.bon .barcode i{background:var(--ink);display:block}
+.bon .note{text-align:center;color:var(--grau);font-size:10px;letter-spacing:.06em;padding-bottom:4px}
+.bon.used{opacity:.5}
+.stamp{position:absolute;right:16px;top:56px;transform:rotate(-9deg);border:2.5px solid var(--grau);color:var(--grau);font-family:var(--display);font-size:17px;text-transform:uppercase;padding:3px 8px;letter-spacing:.06em}
+
+/* Auth */
+.auth-page{padding:40px 20px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%}
+.auth-page h1{font-family:var(--display);font-size:38px;text-transform:uppercase;margin-bottom:4px}
+.auth-page .tagline{font-size:13px;color:var(--grau);margin-bottom:28px}
+.auth-box{width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau)}
+.field input,.field select{border:1px solid var(--linie);border-radius:2px;padding:11px 12px;font-family:var(--body);font-size:15px;background:var(--weiss);color:var(--ink);outline:0}
+.field input:focus,.field select:focus{border-color:var(--ink)}
+.err{background:#FEE;border:1px solid #E88;color:#922;padding:10px 12px;font-size:13px;border-radius:2px}
+.link{background:none;border:0;color:var(--emaille);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;margin-top:6px;text-align:center}
+
+/* Search */
+.search-bar{padding:12px 14px 8px;position:sticky;top:0;background:var(--pflaster);z-index:4}
+.search-inner{display:flex;align-items:center;gap:8px;background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:10px 12px}
+.search-inner input{border:0;outline:0;flex:1;font-size:15px;background:none;min-width:0}
+.search-inner svg{width:16px;height:16px;stroke:var(--grau);fill:none;stroke-width:1.9;flex:none}
+.section-title{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);padding:12px 14px 6px}
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 8px}
+.cat-tile{background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:12px;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:center;font:inherit}
+.cat-tile:hover{border-color:var(--ink)}
+.cat-dot{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-family:var(--display);font-size:12px}
+.cat-tile strong{font-size:13.5px;font-weight:600;display:block}
+.cat-tile small{font-family:var(--mono);font-size:10px;color:var(--grau)}
+
+/* Fav list */
+.fav-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--linie)}
+.fav-row .ava{width:40px;height:40px;font-size:14px}
+.fav-info{flex:1;min-width:0;cursor:pointer}
+.fav-info strong{display:block;font-size:14px;font-weight:500}
+.fav-info small{font-size:12px;color:var(--grau)}
+.fav-info small.live{color:var(--signal);font-weight:500}
+.fav-rm{width:32px;height:32px;border-radius:50%;border:1px solid var(--linie);background:var(--weiss);cursor:pointer;display:grid;place-items:center;color:var(--grau);flex:none}
+
+/* Merchant dashboard */
+.m-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px}
+.m-stat{background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:14px;text-align:center}
+.m-stat b{display:block;font-family:var(--display);font-size:28px;margin-bottom:2px}
+.m-stat span{font-size:11px;color:var(--grau);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+.m-offers{padding:0 14px;display:flex;flex-direction:column;gap:8px}
+.m-offer{background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:12px;display:flex;justify-content:space-between;align-items:center}
+.m-offer h4{font-size:14px;font-weight:600;margin-bottom:3px}
+.m-offer small{font-family:var(--mono);font-size:11px;color:var(--grau)}
+.m-offer .st{font-family:var(--mono);font-size:10px;text-transform:uppercase;padding:3px 8px;border-radius:10px}
+.m-offer .st.active{background:#E6F4EA;color:#1B7A3D}
+.m-offer .st.paused{background:#FFF3E0;color:#E65100}
+.m-offer .st.expired{background:#F5F5F5;color:#999}
+
+/* Scanner */
+.scanner{padding:20px 14px;text-align:center}
+.scanner input{width:100%;max-width:280px;border:2px solid var(--ink);border-radius:2px;padding:14px;font-family:var(--mono);font-size:22px;text-align:center;letter-spacing:.2em;text-transform:uppercase;outline:0;margin-bottom:12px}
+.scanner input:focus{border-color:var(--signal)}
+.scan-result{padding:16px;border-radius:2px;margin-top:12px;font-size:14px}
+.scan-result.ok{background:#E6F4EA;border:1px solid #81C784;color:#1B5E20}
+.scan-result.err{background:#FDECEA;border:1px solid #E57373;color:#B71C1C}
+.scan-result.dup{background:#FFF8E1;border:1px solid #FFD54F;color:#F57F17}
+
+/* Create offer form */
+.form-wrap{padding:14px}
+.form-wrap .field{margin-bottom:10px}
+
+/* Push notification banner */
+.push-banner{position:fixed;top:10px;left:50%;transform:translateX(-50%) translateY(-120%);z-index:30;width:calc(100% - 20px);max-width:460px;background:rgba(255,255,255,.97);border-radius:12px;padding:11px 12px;display:flex;gap:10px;align-items:center;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.3);transition:transform .35s cubic-bezier(.2,.9,.3,1)}
+.push-banner.show{transform:translateX(-50%) translateY(0)}
+.push-icon{width:32px;height:32px;border-radius:8px;background:var(--emaille);color:#fff;display:grid;place-items:center;font-family:var(--display);font-size:14px;flex:none}
+.push-body{flex:1;min-width:0}
+.push-body .app-name{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau)}
+.push-body .msg{font-size:13px;font-weight:600;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.push-body .sub{font-family:var(--mono);font-size:10.5px;color:var(--grau);margin-top:2px}
+
+/* Geo permission */
+.geo-bar{background:var(--emaille);color:#fff;padding:8px 14px;display:flex;align-items:center;gap:10px;font-size:12px;cursor:pointer}
+.geo-bar span{flex:1}
+.geo-bar button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:2px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.geo-bar button:hover{background:rgba(255,255,255,.3)}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.pulse{animation:pulse 1.8s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.loading{text-align:center;padding:40px;color:var(--grau);font-size:14px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef, createContext, useContext } = React;
+
+// ─── API ────────────────────────────────────────────────────────────
+const API = '';
+const getToken = () => localStorage.getItem('nahdran_token');
+const api = async (path, opts = {}) => {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const res = await fetch(API + path, { ...opts, headers });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Fehler');
+  return data;
+};
+
+// ─── Context ────────────────────────────────────────────────────────
+const AppCtx = createContext();
+
+// ─── Helpers ────────────────────────────────────────────────────────
+const euro = v => parseFloat(v).toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
+const walkMin = m => Math.max(1, Math.round(m / 75)) + ' Min.';
+const timeLeft = iso => {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return { text: 'abgelaufen', urgent: true };
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return {
+    text: h > 0 ? `${h}:${String(m).padStart(2, '0')} Std.` : `${m}:${String(sec).padStart(2, '0')} Min.`,
+    urgent: ms < 30 * 60000
+  };
+};
+const pct = (pb, pa) => pa != null ? Math.round((1 - parseFloat(pa) / parseFloat(pb)) * 100) : 100;
+const barcode = code => {
+  const bars = [];
+  for (let i = 0; i < 48; i++) {
+    const w = 1 + ((code.charCodeAt(i % code.length) + i * 7) % 4);
+    bars.push(<i key={i} style={{ width: w, opacity: i % 3 === 0 ? .25 : 1 }} />);
+  }
+  return bars;
+};
+
+// ─── Heart Icon ─────────────────────────────────────────────────────
+const HeartSVG = () => <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.2A4 4 0 0 1 12 8a4 4 0 0 1 7-2.8A4 4 0 0 1 19 10.8C19 15.6 12 20 12 20z"/></svg>;
+const BellSVG = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>;
+const SearchSVG = () => <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>;
+
+// ─── Auth Screen ────────────────────────────────────────────────────
+function AuthScreen() {
+  const { setUser } = useContext(AppCtx);
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('kunde@demo.de');
+  const [pw, setPw] = useState('demo123');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('consumer');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setErr(''); setLoading(true);
+    try {
+      const data = mode === 'login'
+        ? await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password: pw }) })
+        : await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password: pw, name, role }) });
+      localStorage.setItem('nahdran_token', data.token);
+      setUser(data.user);
+    } catch (e) { setErr(e.message); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-page">
+      <h1>Nahdran</h1>
+      <div className="tagline">Deals in Laufweite. Jetzt.</div>
+      <div className="auth-box">
+        {err && <div className="err">{err}</div>}
+        {mode === 'register' && (
+          <>
+            <div className="field"><label>Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Dein Name" /></div>
+            <div className="field"><label>Rolle</label>
+              <select value={role} onChange={e => setRole(e.target.value)}>
+                <option value="consumer">Kunde</option>
+                <option value="merchant">Händler</option>
+              </select>
+            </div>
+          </>
+        )}
+        <div className="field"><label>E-Mail</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="mail@beispiel.de" /></div>
+        <div className="field"><label>Passwort</label><input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="min. 6 Zeichen" onKeyDown={e => e.key === 'Enter' && submit()} /></div>
+        <button className="btn" onClick={submit} disabled={loading}>{loading ? '...' : mode === 'login' ? 'Anmelden' : 'Registrieren'}</button>
+        <button className="link" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); }}>
+          {mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Anmelden'}
+        </button>
+        {mode === 'login' && (
+          <div style={{ fontSize: 11, color: 'var(--grau)', textAlign: 'center', marginTop: 8, fontFamily: 'var(--mono)' }}>
+            Kunde: kunde@demo.de / demo123<br/>Händler: cafe@demo.de / demo123
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Deal Card ──────────────────────────────────────────────────────
+function DealCard({ offer, onOpen, onFav }) {
+  const [tl, setTl] = useState(timeLeft(offer.ends_at));
+  useEffect(() => { const i = setInterval(() => setTl(timeLeft(offer.ends_at)), 1000); return () => clearInterval(i); }, [offer.ends_at]);
+
+  return (
+    <button className="card" onClick={() => onOpen(offer.id)}>
+      <span className="ava" style={{ background: offer.category_color }}>{offer.merchant_short}</span>
+      <span className="c-body">
+        <span className="c-cat">{offer.category_label}</span>
+        <h3>{offer.title}</h3>
+        <span className="c-shop">{offer.merchant_name} · Nr. {offer.house_number || '–'}</span>
+        <span className="c-meta">
+          <span style={{ fontWeight: 600 }}>{offer.distance} m</span>
+          <span className={`c-time${tl.urgent ? ' urgent' : ''}`}>{tl.text}</span>
+          <span className="c-price">
+            {offer.price_after != null ? <><s>{euro(offer.price_before)}</s><b>{euro(offer.price_after)}</b></> : <b>gratis</b>}
+          </span>
+        </span>
+      </span>
+      {onFav && <span className={`fav-btn${offer.is_favourite ? ' on' : ''}`} onClick={e => { e.stopPropagation(); onFav(offer); }}>
+        <HeartSVG />
+      </span>}
+    </button>
+  );
+}
+
+// ─── Deal Detail Sheet ──────────────────────────────────────────────
+function DealSheet({ offerId, onClose }) {
+  const { refresh } = useContext(AppCtx);
+  const [o, setO] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [tl, setTl] = useState(null);
+
+  useEffect(() => { if (offerId) api(`/api/offers/${offerId}`).then(setO).catch(() => {}); }, [offerId]);
+  useEffect(() => { if (!o) return; const i = setInterval(() => setTl(timeLeft(o.ends_at)), 1000); setTl(timeLeft(o.ends_at)); return () => clearInterval(i); }, [o]);
+
+  const secure = async () => {
+    setSaving(true);
+    try { await api('/api/vouchers', { method: 'POST', body: JSON.stringify({ offerId }) }); refresh(); onClose('gutscheine'); }
+    catch (e) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const toggleFav = async () => {
+    if (o.is_favourite) { await api(`/api/favourites/${o.merchant_id}`, { method: 'DELETE' }); setO({ ...o, is_favourite: false }); }
+    else { await api('/api/favourites', { method: 'POST', body: JSON.stringify({ merchantId: o.merchant_id }) }); setO({ ...o, is_favourite: true }); }
+    refresh();
+  };
+
+  if (!o || !tl) return null;
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="sheet">
+        <div className="sheet-scroll">
+          <div className="d-hero" style={{ background: o.category_color }}>
+            <span className="init">{o.merchant_short}</span>
+            <button className="d-close" onClick={() => onClose()}>✕</button>
+            <button className={`d-fav${o.is_favourite ? ' on' : ''}`} onClick={toggleFav}><HeartSVG /></button>
+          </div>
+          <div className="d-body">
+            <span className="c-cat">{o.category_label} · {o.merchant_name} · Kaiserstraße {o.house_number || '–'}</span>
+            <h2>{o.title}</h2>
+            <div className="d-price">
+              {o.price_after != null
+                ? <><span className="big">{euro(o.price_after)}</span><s>{euro(o.price_before)}</s><span className="pct">−{pct(o.price_before, o.price_after)} %</span></>
+                : <><span className="big">gratis</span><s>{euro(o.price_before)}</s><span className="pct">geschenkt</span></>}
+            </div>
+            <div className="facts">
+              <div className="fact"><b>{o.distance || '–'} m</b><span>{walkMin(o.distance || 0)}</span></div>
+              <div className="fact"><b className={tl.urgent ? 'urgent' : ''}>{tl.text}</b><span>Restzeit</span></div>
+              <div className="fact"><b>{o.quota_remaining}</b><span>von {o.quota_total}</span></div>
+            </div>
+            {o.terms?.length > 0 && <ul className="terms">{o.terms.map((t, i) => <li key={i}>{t}</li>)}</ul>}
+          </div>
+        </div>
+        <div className="sheet-foot">
+          {o.has_voucher
+            ? <><button className="btn sec" onClick={() => onClose('gutscheine')}>Zu meinen Gutscheinen</button><div className="hint">Bereits gesichert.</div></>
+            : <><button className="btn" onClick={secure} disabled={saving || o.quota_remaining <= 0}>{saving ? 'Wird gesichert...' : o.quota_remaining <= 0 ? 'Ausverkauft' : 'Sichern'}</button><div className="hint">Kostenlos · Bezahlt wird im Geschäft</div></>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Feed Screen ────────────────────────────────────────────────────
+function FeedScreen() {
+  const { geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav } = useContext(AppCtx);
+  const radii = [300, 500, 1000, 1500];
+
+  const load = useCallback(async () => {
+    const data = await api(`/api/feed?lat=${geo.lat}&lng=${geo.lng}&radius=${radius}&category=${category || ''}`);
+    setFeedData(data);
+  }, [geo, radius, category]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!feedData) return <div className="loading">Lade Angebote...</div>;
+  return (
+    <>
+      <div className="chips-wrap">
+        <div className="chips">
+          <button className="chip rad" onClick={() => setRadius(radii[(radii.indexOf(radius) + 1) % radii.length])}>⌀ {radius} m ▾</button>
+          <button className={`chip${!category ? ' on' : ''}`} onClick={() => setCategory(null)}>Alle <span className="n">{feedData.total}</span></button>
+          {feedData.categories?.map(c => (
+            <button key={c.id} className={`chip${category === c.id ? ' on' : ''}`} onClick={() => setCategory(c.id)}>{c.label} <span className="n">{c.count}</span></button>
+          ))}
+        </div>
+      </div>
+      {feedData.offers.length === 0
+        ? <div className="empty"><h3>Nichts im Umkreis</h3><p>Erweitere den Radius oder wähle eine andere Kategorie.</p></div>
+        : <div className="feed">{feedData.offers.map(o => <DealCard key={o.id} offer={o} onOpen={openDeal} onFav={toggleFav} />)}</div>}
+    </>
+  );
+}
+
+// ─── Search Screen ──────────────────────────────────────────────────
+function SearchScreen() {
+  const { geo, openDeal, toggleFav, feedData } = useContext(AppCtx);
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState(null);
+  const categories = feedData?.categories || [];
+
+  useEffect(() => {
+    if (q.length < 2) { setResults(null); return; }
+    const t = setTimeout(async () => {
+      const data = await api(`/api/search?q=${encodeURIComponent(q)}&lat=${geo.lat}&lng=${geo.lng}`);
+      setResults(data.offers);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, geo]);
+
+  const { setCategory, setTab } = useContext(AppCtx);
+  const jumpCat = id => { setCategory(id); setTab('naehe'); };
+
+  return (
+    <>
+      <div className="search-bar">
+        <div className="search-inner">
+          <SearchSVG />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Geschäft, Kategorie oder Angebot" autoFocus />
+        </div>
+      </div>
+      {results
+        ? results.length > 0
+          ? <div className="feed">{results.map(o => <DealCard key={o.id} offer={o} onOpen={openDeal} onFav={toggleFav} />)}</div>
+          : <div className="empty"><h3>Kein Treffer</h3><p>Für „{q}" läuft heute nichts. Versuch einen anderen Begriff.</p></div>
+        : <>
+            <div className="section-title">Kategorien</div>
+            <div className="cat-grid">
+              {categories.map(c => (
+                <button className="cat-tile" key={c.id} onClick={() => jumpCat(c.id)}>
+                  <span className="cat-dot" style={{ background: c.color }}>{c.label[0]}</span>
+                  <span><strong>{c.label}</strong><small>{c.count} Aktionen</small></span>
+                </button>
+              ))}
+            </div>
+          </>}
+    </>
+  );
+}
+
+// ─── Favourites Screen ──────────────────────────────────────────────
+function FavScreen() {
+  const { openDeal } = useContext(AppCtx);
+  const [favs, setFavs] = useState(null);
+  const load = async () => { setFavs(await api('/api/favourites')); };
+  useEffect(() => { load(); }, []);
+
+  const remove = async (mid) => { await api(`/api/favourites/${mid}`, { method: 'DELETE' }); load(); };
+
+  if (!favs) return <div className="loading">Lade...</div>;
+  if (favs.length === 0) return <div className="empty"><h3>Keine Favoriten</h3><p>Tippe auf das Herz bei einem Angebot — Favoriten dürfen dich zusätzlich benachrichtigen.</p></div>;
+
+  return (
+    <>
+      <div style={{ padding: '14px 14px 4px', fontSize: 13, color: 'var(--grau)', lineHeight: 1.55 }}>
+        Favoriten dürfen dich einmal pro Woche zusätzlich benachrichtigen.
+      </div>
+      {favs.map(f => (
+        <div className="fav-row" key={f.merchant_id}>
+          <span className="ava" style={{ background: f.category_color }}>{f.merchant_short}</span>
+          <span className="fav-info" onClick={() => f.current_offer && openDeal(f.current_offer.id)}>
+            <strong>{f.merchant_name}</strong>
+            <small className={f.current_offer ? 'live' : ''}>{f.current_offer ? `${f.current_offer.title}` : `Kaiserstraße ${f.house_number} · keine Aktion`}</small>
+          </span>
+          <button className="fav-rm" onClick={() => remove(f.merchant_id)} title="Entfernen">✕</button>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ─── Voucher Screen ─────────────────────────────────────────────────
+function VoucherScreen() {
+  const [vouchers, setVouchers] = useState(null);
+  const load = async () => { setVouchers(await api('/api/vouchers')); };
+  useEffect(() => { load(); }, []);
+
+  if (!vouchers) return <div className="loading">Lade...</div>;
+  if (vouchers.length === 0) return <div className="empty"><h3>Noch nichts gesichert</h3><p>Gesicherte Angebote landen hier — mit Code zum Vorzeigen an der Kasse.</p></div>;
+
+  return (
+    <div style={{ paddingTop: 14 }}>
+      {vouchers.map(v => <VoucherBon key={v.id} v={v} onReload={load} />)}
+    </div>
+  );
+}
+
+function VoucherBon({ v, onReload }) {
+  const [tl, setTl] = useState(timeLeft(v.expires_at));
+  useEffect(() => { const i = setInterval(() => setTl(timeLeft(v.expires_at)), 1000); return () => clearInterval(i); }, [v.expires_at]);
+  const used = v.status === 'redeemed';
+  const expired = v.status === 'expired';
+
+  return (
+    <div className={`bon${used ? ' used' : ''}`}>
+      {used && <span className="stamp">Eingelöst</span>}
+      <div className="bon-edge top" />
+      <div className="bon-in">
+        <div className="bon-head"><strong>{v.merchant_name}</strong><span>{v.category_label}</span></div>
+        <h3>{v.title}</h3>
+        <div className="addr">Kaiserstraße {v.house_number || '–'} · {Math.round(haversineJS(50.1005, 8.7648, v.mlat, v.mlng))} m</div>
+        <div className="timer-row">
+          <span>{used ? 'eingelöst' : expired ? 'abgelaufen' : 'gültig'}</span>
+          <b className={tl.urgent && !used && !expired ? 'urgent' : ''}>{used ? new Date(v.redeemed_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : expired ? '–' : tl.text}</b>
+        </div>
+        {!used && !expired && (
+          <div className="code-area">
+            <div className="digits">{v.code}</div>
+            <div className="barcode">{barcode(v.code)}</div>
+          </div>
+        )}
+        <div className="note">{used ? 'Bereits verwendet' : expired ? 'Leider abgelaufen' : 'Im Geschäft vorzeigen · Personal scannt den Code'}</div>
+      </div>
+      <div className="bon-edge bot" />
+    </div>
+  );
+}
+
+function haversineJS(lat1, lng1, lat2, lng2) {
+  const R = 6371000, toR = d => d * Math.PI / 180;
+  const dLat = toR(lat2 - lat1), dLng = toR(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Merchant Dashboard ─────────────────────────────────────────────
+function MerchantDashboard() {
+  const [stats, setStats] = useState(null);
+  const [view, setView] = useState('dash'); // dash, create, scan
+  const [scanCode, setScanCode] = useState('');
+  const [scanResult, setScanResult] = useState(null);
+  const [form, setForm] = useState({ title: '', price_before: '', price_after: '', quota_total: 20, duration_hours: 4, terms: '' });
+
+  const load = async () => { try { setStats(await api('/api/merchant/stats')); } catch {} };
+  useEffect(() => { load(); }, []);
+
+  const createOffer = async () => {
+    try {
+      const terms = form.terms.split('\n').filter(t => t.trim());
+      await api('/api/merchant/offers', { method: 'POST', body: JSON.stringify({
+        title: form.title, price_before: parseFloat(form.price_before),
+        price_after: form.price_after ? parseFloat(form.price_after) : null,
+        is_free: !form.price_after, quota_total: parseInt(form.quota_total),
+        duration_hours: parseInt(form.duration_hours), terms
+      }) });
+      setForm({ title: '', price_before: '', price_after: '', quota_total: 20, duration_hours: 4, terms: '' });
+      setView('dash'); load();
+    } catch (e) { alert(e.message); }
+  };
+
+  const redeem = async () => {
+    setScanResult(null);
+    try {
+      const res = await api('/api/merchant/redeem', { method: 'POST', body: JSON.stringify({ code: scanCode.toUpperCase() }) });
+      setScanResult(res.status === 'already_redeemed'
+        ? { type: 'dup', msg: `Bereits eingelöst am ${new Date(res.redeemed_at).toLocaleString('de-DE')}` }
+        : { type: 'ok', msg: `Eingelöst: ${res.title}` });
+      setScanCode(''); load();
+    } catch (e) { setScanResult({ type: 'err', msg: e.message }); }
+  };
+
+  const toggleOffer = async (id) => {
+    await api(`/api/merchant/offers/${id}/pause`, { method: 'PUT' });
+    load();
+  };
+
+  if (!stats) return <div className="loading">Lade Dashboard...</div>;
+
+  return (
+    <>
+      <div style={{ padding: '14px 14px 0', display: 'flex', gap: 8 }}>
+        <button className={`chip${view === 'dash' ? ' on' : ''}`} onClick={() => setView('dash')}>Dashboard</button>
+        <button className={`chip${view === 'scan' ? ' on' : ''}`} onClick={() => setView('scan')}>Scanner</button>
+        <button className={`chip${view === 'create' ? ' on' : ''}`} onClick={() => setView('create')}>+ Angebot</button>
+      </div>
+
+      {view === 'dash' && (
+        <>
+          <div className="m-stats">
+            <div className="m-stat"><b>{stats.activeOffers}</b><span>Aktiv</span></div>
+            <div className="m-stat"><b>{stats.totalReserved}</b><span>Gesichert</span></div>
+            <div className="m-stat"><b>{stats.totalRedeemed}</b><span>Eingelöst</span></div>
+            <div className="m-stat"><b>{stats.redemptionRate}%</b><span>Quote</span></div>
+          </div>
+          <div className="section-title">Meine Angebote</div>
+          <MerchantOffers merchantId={stats.merchant.id} onToggle={toggleOffer} />
+        </>
+      )}
+
+      {view === 'scan' && (
+        <div className="scanner">
+          <h3 style={{ fontFamily: 'var(--display)', fontSize: 22, textTransform: 'uppercase', margin: '16px 0 12px' }}>Code einlösen</h3>
+          <p style={{ color: 'var(--grau)', fontSize: 13, marginBottom: 16 }}>Gutscheincode des Kunden eingeben</p>
+          <input value={scanCode} onChange={e => setScanCode(e.target.value.toUpperCase())} placeholder="A B C 1 2 3" maxLength={6} onKeyDown={e => e.key === 'Enter' && scanCode.length === 6 && redeem()} />
+          <button className="btn" onClick={redeem} disabled={scanCode.length < 6} style={{ maxWidth: 280 }}>Einlösen</button>
+          {scanResult && <div className={`scan-result ${scanResult.type}`}>{scanResult.msg}</div>}
+        </div>
+      )}
+
+      {view === 'create' && (
+        <div className="form-wrap">
+          <h3 style={{ fontFamily: 'var(--display)', fontSize: 22, textTransform: 'uppercase', margin: '6px 0 14px' }}>Neues Angebot</h3>
+          <div className="field"><label>Titel</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="z.B. 2 für 1 Kaffee" /></div>
+          <div className="field"><label>Originalpreis (€)</label><input type="number" step="0.01" value={form.price_before} onChange={e => setForm({ ...form, price_before: e.target.value })} placeholder="6.80" /></div>
+          <div className="field"><label>Angebotspreis (€, leer = gratis)</label><input type="number" step="0.01" value={form.price_after} onChange={e => setForm({ ...form, price_after: e.target.value })} placeholder="3.40" /></div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div className="field" style={{ flex: 1 }}><label>Kontingent</label><input type="number" value={form.quota_total} onChange={e => setForm({ ...form, quota_total: e.target.value })} /></div>
+            <div className="field" style={{ flex: 1 }}><label>Laufzeit (Std.)</label><input type="number" value={form.duration_hours} onChange={e => setForm({ ...form, duration_hours: e.target.value })} /></div>
+          </div>
+          <div className="field"><label>Bedingungen (eine pro Zeile)</label><textarea value={form.terms} onChange={e => setForm({ ...form, terms: e.target.value })} rows={3} style={{ border: '1px solid var(--linie)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--body)', fontSize: 14, resize: 'vertical' }} placeholder="Nur vor Ort&#10;Ein Gutschein pro Person" /></div>
+          <button className="btn" onClick={createOffer} disabled={!form.title || !form.price_before} style={{ marginTop: 6 }}>Veröffentlichen</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function MerchantOffers({ merchantId, onToggle }) {
+  const [offers, setOffers] = useState([]);
+  useEffect(() => { api('/api/merchant/offers').then(d => setOffers(d.offers)).catch(() => {}); }, []);
+
+  if (!offers.length) return <div className="empty"><h3>Keine Angebote</h3><p>Erstelle dein erstes Angebot mit dem „+" Button oben.</p></div>;
+  return (
+    <div className="m-offers">
+      {offers.map(o => {
+        const tl = timeLeft(o.ends_at);
+        return (
+          <div className="m-offer" key={o.id}>
+            <div>
+              <h4>{o.title}</h4>
+              <small>{o.quota_reserved}/{o.quota_total} gesichert · {tl.text}</small>
+            </div>
+            <button className={`st ${o.status}`} onClick={() => onToggle(o.id)}>
+              {o.status === 'active' ? 'Aktiv' : o.status === 'paused' ? 'Pausiert' : 'Abgelaufen'}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Push Banner ────────────────────────────────────────────────────
+function PushBanner({ push, onTap, onDismiss }) {
+  if (!push) return null;
+  return (
+    <div className={`push-banner${push ? ' show' : ''}`} onClick={onTap}>
+      <span className="push-icon">N</span>
+      <span className="push-body">
+        <span className="app-name">Nahdran · jetzt</span>
+        <span className="msg">{push.title}</span>
+        <span className="sub">{push.body}</span>
+      </span>
+    </div>
+  );
+}
+
+// ─── App ────────────────────────────────────────────────────────────
+function App() {
+  const [user, setUser] = useState(null);
+  const [tab, setTab] = useState('naehe');
+  const [geo, setGeo] = useState({ lat: 50.1005, lng: 8.7648, source: 'default' });
+  const [geoAsked, setGeoAsked] = useState(false);
+  const [feedData, setFeedData] = useState(null);
+  const [radius, setRadius] = useState(500);
+  const [category, setCategory] = useState(null);
+  const [detailId, setDetailId] = useState(null);
+  const [push, setPush] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = () => setRefreshKey(k => k + 1);
+
+  // restore session
+  useEffect(() => {
+    if (getToken()) {
+      api('/api/auth/me').then(d => setUser(d.user)).catch(() => localStorage.removeItem('nahdran_token'));
+    }
+  }, []);
+
+  // geo
+  const requestGeo = () => {
+    setGeoAsked(true);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        pos => setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'gps' }),
+        () => setGeo(g => ({ ...g, source: 'denied' })),
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+      navigator.geolocation.watchPosition(
+        pos => setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'gps' }),
+        () => {}, { enableHighAccuracy: false, maximumAge: 30000 }
+      );
+    }
+  };
+
+  // push simulation
+  useEffect(() => {
+    if (!user || user.role !== 'consumer') return;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api('/api/push/simulate', { method: 'POST', body: JSON.stringify({ lat: geo.lat, lng: geo.lng }) });
+        if (data.push) {
+          setPush(data.push);
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Nahdran', { body: `${data.push.title} · ${data.push.body}`, icon: '/favicon.ico' });
+          }
+          setTimeout(() => setPush(null), 8000);
+        }
+      } catch {}
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [user, geo]);
+
+  // request notification permission
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      setTimeout(() => Notification.requestPermission(), 5000);
+    }
+  }, [user]);
+
+  const openDeal = id => setDetailId(id);
+  const closeDeal = (goTab) => { setDetailId(null); if (goTab) setTab(goTab); };
+
+  const toggleFav = async (offer) => {
+    if (offer.is_favourite) { await api(`/api/favourites/${offer.merchant_id}`, { method: 'DELETE' }); }
+    else { await api('/api/favourites', { method: 'POST', body: JSON.stringify({ merchantId: offer.merchant_id }) }); }
+    refresh();
+    setFeedData(fd => fd ? { ...fd, offers: fd.offers.map(o => o.id === offer.id ? { ...o, is_favourite: !o.is_favourite } : o) } : fd);
+  };
+
+  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setFeedData(null); };
+
+  const ctx = { user, setUser, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab };
+
+  if (!user) return <AppCtx.Provider value={ctx}><AuthScreen /></AppCtx.Provider>;
+
+  const isMerchant = user.role === 'merchant';
+  const statusText = geo.source === 'gps' ? `Standort aktiv · ${feedData?.total || '–'} Aktionen` :
+    feedData ? `${feedData.total} Aktionen · Offenbach Innenstadt` : 'Lade...';
+
+  return (
+    <AppCtx.Provider value={ctx}>
+      <div className="app">
+        <PushBanner push={push} onTap={() => { if (push?.offer_id) { openDeal(push.offer_id); setPush(null); } }} />
+
+        <header className="hdr">
+          <div className="hdr-row">
+            <div>
+              <div className="sub">{isMerchant ? 'Händler-Dashboard' : 'Offenbach · Innenstadt'}</div>
+              <h1>{isMerchant ? user.name : 'Kaiserstraße'}</h1>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button className="hdr-btn" onClick={logout} title="Abmelden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
+          <div className="status"><span className="dot pulse" />{statusText}</div>
+        </header>
+
+        {!isMerchant && !geoAsked && (
+          <div className="geo-bar" onClick={requestGeo}>
+            <span>Standort aktivieren für genauere Entfernungen</span>
+            <button>Aktivieren</button>
+          </div>
+        )}
+
+        <div className="main" key={refreshKey}>
+          {isMerchant
+            ? <MerchantDashboard />
+            : <>
+                {tab === 'naehe' && <FeedScreen />}
+                {tab === 'suche' && <SearchScreen />}
+                {tab === 'favoriten' && <FavScreen />}
+                {tab === 'gutscheine' && <VoucherScreen />}
+              </>}
+        </div>
+
+        {!isMerchant && (
+          <nav className="tabs">
+            {[
+              { id: 'naehe', label: 'Nähe', icon: <svg viewBox="0 0 24 24"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg> },
+              { id: 'suche', label: 'Suche', icon: <SearchSVG /> },
+              { id: 'favoriten', label: 'Favoriten', icon: <HeartSVG /> },
+              { id: 'gutscheine', label: 'Gutscheine', icon: <svg viewBox="0 0 24 24"><path d="M3 9V6h18v3a2.5 2.5 0 0 0 0 6v3H3v-3a2.5 2.5 0 0 0 0-6z"/><path d="M12 7v2M12 12v1M12 16v1"/></svg> }
+            ].map(t => (
+              <button key={t.id} className={`tab${tab === t.id ? ' on' : ''}`} onClick={() => setTab(t.id)} style={{ position: 'relative' }}>
+                {t.icon}<span>{t.label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {detailId && <DealSheet offerId={detailId} onClose={closeDeal} />}
+      </div>
+    </AppCtx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
