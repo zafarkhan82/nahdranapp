@@ -1,0 +1,6 @@
+node_modules/
+nahdran.db
+nahdran.db-*
+*.db-shm
+*.db-wal
+.env
