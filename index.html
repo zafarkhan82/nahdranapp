@@ -402,6 +402,7 @@ function DealSheet({ offerId, onClose }) {
 function FeedScreen() {
   const { geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav } = useContext(AppCtx);
   const radii = [300, 500, 1000, 1500];
+  const nextRadius = radii.find(r => r > radius);
 
   const load = useCallback(async () => {
     const data = await api(`/api/feed?lat=${geo.lat}&lng=${geo.lng}&radius=${radius}&category=${category || ''}`);
@@ -423,7 +424,11 @@ function FeedScreen() {
         </div>
       </div>
       {feedData.offers.length === 0
-        ? <div className="empty"><h3>Nichts im Umkreis</h3><p>Erweitere den Radius oder wähle eine andere Kategorie.</p></div>
+        ? <div className="empty">
+            <h3>Nichts im Umkreis</h3>
+            <p>Erweitere den Radius oder wähle eine andere Kategorie.</p>
+            {nextRadius && <button className="btn" style={{ maxWidth: 220, margin: '0 auto' }} onClick={() => setRadius(nextRadius)}>Auf {nextRadius} m erweitern</button>}
+          </div>
         : <div className="feed">{feedData.offers.map(o => <DealCard key={o.id} offer={o} onOpen={openDeal} onFav={toggleFav} />)}</div>}
     </>
   );
