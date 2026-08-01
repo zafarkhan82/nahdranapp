@@ -677,6 +677,182 @@ app.get('/api/categories', (req, res) => {
   res.json(db.prepare('SELECT * FROM categories ORDER BY sort_order').all());
 });
 
+// ─── Rechtliche Seiten (statisches HTML) ────────────────────────────────
+//
+// TODO: Vor Live-Gang mit echten Daten ausfüllen — rechtliche Prüfung durch
+// den Betreiber erforderlich, nicht automatisch generierbar.
+// Alle Angaben in eckigen Klammern sind Platzhalter und MÜSSEN vor der
+// Veröffentlichung durch die tatsächlichen Angaben des Anbieters ersetzt
+// werden. Fehlende oder falsche Pflichtangaben sind abmahnfähig.
+
+function legalPage(title, body) {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${title} · NAHDRAN</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fira+Sans:wght@400;500;600;700&family=Fira+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--emaille:#1B3A93;--ink:#12161A;--pflaster:#EAE8E1;--weiss:#FFF;--signal:#FF4A0F;--grau:#7A766E;--linie:#D6D3CA;--display:"Anton",sans-serif;--body:"Fira Sans",system-ui,sans-serif;--mono:"Fira Mono",monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body);color:var(--ink);background:var(--pflaster);line-height:1.6}
+.wrap{max-width:680px;margin:0 auto;padding:18px 18px 60px}
+.back{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--emaille);margin-bottom:22px}
+h1{font-family:var(--display);font-size:32px;text-transform:uppercase;font-weight:400;line-height:1.05;margin-bottom:6px}
+.sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);margin-bottom:24px}
+h2{font-size:16px;font-weight:600;margin:26px 0 6px}
+p,li{font-size:15px}
+ul{padding-left:20px;margin-top:4px}
+li{margin-top:3px}
+address{font-style:normal;font-size:15px}
+.ph{font-family:var(--mono);font-size:14px;background:var(--weiss);border:1px dashed var(--linie);padding:1px 5px;white-space:nowrap}
+.note{background:var(--weiss);border-left:3px solid var(--signal);padding:12px 14px;font-size:13.5px;color:var(--grau);margin:18px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="/">&larr; Zurück zur App</a>
+<h1>${title}</h1>
+<div class="sub">Nahdran</div>
+${body}
+</div>
+</body>
+</html>`;
+}
+
+const PLACEHOLDER_NOTE = `<div class="note">Hinweis für den Betreiber: Alle in eckigen Klammern gesetzten Angaben sind
+Platzhalter und müssen vor dem Live-Gang durch die tatsächlichen Angaben ersetzt und rechtlich geprüft werden.</div>`;
+
+app.get('/impressum', (req, res) => {
+  res.type('html').send(legalPage('Impressum', `
+${PLACEHOLDER_NOTE}
+
+<h2>Angaben gemäß § 5 DDG</h2>
+<address>
+<span class="ph">[Name des Anbieters]</span><br>
+<span class="ph">[Rechtsform, falls Unternehmen]</span><br>
+<span class="ph">[Anschrift: Straße und Hausnummer]</span><br>
+<span class="ph">[PLZ und Ort]</span><br>
+<span class="ph">[Land]</span>
+</address>
+
+<h2>Vertreten durch</h2>
+<p><span class="ph">[Name der vertretungsberechtigten Person]</span></p>
+
+<h2>Kontakt</h2>
+<ul>
+<li>E-Mail: <span class="ph">[E-Mail-Adresse]</span></li>
+<li>Telefon: <span class="ph">[Telefonnummer, falls vorhanden]</span></li>
+</ul>
+
+<h2>Registereintrag</h2>
+<ul>
+<li>Registergericht: <span class="ph">[Registergericht, falls vorhanden]</span></li>
+<li>Registernummer: <span class="ph">[Registernummer, falls vorhanden]</span></li>
+</ul>
+
+<h2>Umsatzsteuer-Identifikationsnummer</h2>
+<p>Gemäß § 27 a Umsatzsteuergesetz: <span class="ph">[Umsatzsteuer-ID, falls vorhanden]</span></p>
+
+<h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+<address>
+<span class="ph">[Name]</span><br>
+<span class="ph">[Anschrift]</span>
+</address>
+
+<h2>Verbraucherstreitbeilegung</h2>
+<p><span class="ph">[Angabe, ob eine Teilnahme an einem Streitbeilegungsverfahren vor einer
+Verbraucherschlichtungsstelle erfolgt — bitte ergänzen]</span></p>
+
+<h2>Haftung für Inhalte und Links</h2>
+<p>Die Inhalte dieser Anwendung werden mit Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit
+und Aktualität der von Händlern eingestellten Angebote wird keine Gewähr übernommen. Für Inhalte
+externer Links sind ausschließlich deren Betreiber verantwortlich.</p>
+
+<h2>Datenschutz</h2>
+<p>Informationen zur Verarbeitung personenbezogener Daten findest du in der
+<a href="/datenschutz">Datenschutzerklärung</a>.</p>
+`));
+});
+
+app.get('/datenschutz', (req, res) => {
+  res.type('html').send(legalPage('Datenschutz', `
+${PLACEHOLDER_NOTE}
+
+<h2>1. Verantwortliche Stelle</h2>
+<p>Verantwortlich für die Datenverarbeitung in dieser Anwendung ist:</p>
+<address>
+<span class="ph">[Name des Anbieters]</span><br>
+<span class="ph">[Anschrift]</span><br>
+E-Mail: <span class="ph">[E-Mail-Adresse]</span><br>
+Telefon: <span class="ph">[Telefonnummer, falls vorhanden]</span>
+</address>
+<p>Datenschutzbeauftragte Person: <span class="ph">[Name und Kontakt, falls benannt]</span></p>
+
+<h2>2. Welche Daten wir erheben</h2>
+<ul>
+<li><strong>Kontodaten:</strong> E-Mail-Adresse, Name und ein verschlüsselt gespeichertes Passwort.</li>
+<li><strong>Standortdaten:</strong> Nur wenn du die Standortfunktion aktiv freigibst. Die Koordinaten
+werden zur Berechnung der Entfernung zu Angeboten verwendet; ein Standortverlauf wird nicht gespeichert.</li>
+<li><strong>Nutzungsdaten:</strong> gesicherte und eingelöste Gutscheine, Favoriten,
+Benachrichtigungseinstellungen sowie technische Zugriffsdaten.</li>
+<li><strong>Händlerdaten:</strong> bei Händlerkonten zusätzlich Geschäftsname, Kategorie, Adresse,
+Koordinaten und Beschreibung des Geschäfts.</li>
+</ul>
+
+<h2>3. Zweck der Verarbeitung</h2>
+<ul>
+<li>Bereitstellung des Nutzerkontos und Anmeldung</li>
+<li>Anzeige von Angeboten in der Umgebung und Berechnung der Entfernung</li>
+<li>Reservierung und Einlösung von Gutscheinen</li>
+<li>Versand von Benachrichtigungen, soweit von dir aktiviert</li>
+<li>Betrieb, Sicherheit und Fehleranalyse der Anwendung</li>
+</ul>
+
+<h2>4. Rechtsgrundlage</h2>
+<p>Die Verarbeitung erfolgt auf Grundlage von Art. 6 Abs. 1 lit. b DSGVO (Erfüllung des
+Nutzungsvertrags: Konto, Gutscheine, Händlerprofil) sowie Art. 6 Abs. 1 lit. a DSGVO
+(Einwilligung: Standortfreigabe und Benachrichtigungen). Eine erteilte Einwilligung kannst du
+jederzeit mit Wirkung für die Zukunft widerrufen, etwa durch Entzug der Standortfreigabe
+in den Browsereinstellungen.</p>
+
+<h2>5. Speicherdauer</h2>
+<ul>
+<li>Kontodaten: bis zur Löschung des Kontos.</li>
+<li>Standortdaten: nur für die Dauer der jeweiligen Sitzung zur Entfernungsberechnung; sie werden
+nicht dauerhaft gespeichert.</li>
+<li>Gutscheine und Einlösedaten: <span class="ph">[Aufbewahrungsdauer angeben, z. B. bis zum Ablauf
+gesetzlicher Aufbewahrungsfristen]</span></li>
+</ul>
+
+<h2>6. Empfänger und Auftragsverarbeiter</h2>
+<p>Hosting und technischer Betrieb: <span class="ph">[Name und Anschrift des Hosting-Anbieters]</span>.
+Weitere Empfänger: <span class="ph">[weitere Dienstleister, falls vorhanden]</span>. Eine Übermittlung
+in Drittländer findet statt: <span class="ph">[ja/nein — ggf. Grundlage angeben]</span>.</p>
+
+<h2>7. Deine Rechte</h2>
+<ul>
+<li>Auskunft über die zu deiner Person gespeicherten Daten (Art. 15 DSGVO)</li>
+<li>Berichtigung unrichtiger Daten (Art. 16 DSGVO)</li>
+<li>Löschung (Art. 17 DSGVO) und Einschränkung der Verarbeitung (Art. 18 DSGVO)</li>
+<li>Datenübertragbarkeit (Art. 20 DSGVO)</li>
+<li>Widerspruch gegen die Verarbeitung (Art. 21 DSGVO)</li>
+<li>Widerruf erteilter Einwilligungen (Art. 7 Abs. 3 DSGVO)</li>
+<li>Beschwerde bei einer Aufsichtsbehörde (Art. 77 DSGVO), zuständig ist
+<span class="ph">[zuständige Aufsichtsbehörde]</span></li>
+</ul>
+
+<h2>8. Kontakt für Datenschutzanfragen</h2>
+<p>Anfragen zum Datenschutz richtest du bitte an <span class="ph">[E-Mail-Adresse für
+Datenschutzanfragen]</span> oder postalisch an <span class="ph">[Anschrift]</span>.</p>
+
+<h2>9. Impressum</h2>
+<p>Die Anbieterkennzeichnung findest du im <a href="/impressum">Impressum</a>.</p>
+`));
+});
+
 // ─── Seed Data ──────────────────────────────────────────────────────────
 
 function seed() {
