@@ -583,7 +583,7 @@ function haversineJS(lat1, lng1, lat2, lng2) {
 
 // ─── Merchant Onboarding ────────────────────────────────────────────
 function MerchantOnboarding() {
-  const { user } = useContext(AppCtx);
+  const { user, setMerchant } = useContext(AppCtx);
   const [categories, setCategories] = useState([]);
   const [name, setName] = useState('');
   const [short, setShort] = useState('');
@@ -597,6 +597,12 @@ function MerchantOnboarding() {
   const [geoSource, setGeoSource] = useState(null); // null | 'gps' | 'manual'
   const [locating, setLocating] = useState(false);
   const [geoErr, setGeoErr] = useState('');
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const latNum = parseFloat(lat), lngNum = parseFloat(lng);
+  const hasLocation = Number.isFinite(latNum) && Number.isFinite(lngNum) && (latNum !== 0 || lngNum !== 0);
+  const complete = name.trim() && short.trim() && categoryId && street.trim() && houseNumber !== '' && hasLocation;
 
   useEffect(() => { api('/api/categories').then(setCategories).catch(() => {}); }, []);
 
@@ -620,6 +626,23 @@ function MerchantOnboarding() {
     );
   };
 
+  const submit = async () => {
+    setErr(''); setSaving(true);
+    try {
+      const created = await api('/api/merchant/setup', { method: 'POST', body: JSON.stringify({
+        name: name.trim(),
+        short: short.trim().toUpperCase(),
+        category_id: categoryId,
+        street: street.trim(),
+        house_number: parseInt(houseNumber, 10),
+        lat: latNum,
+        lng: lngNum,
+        description: description.trim()
+      }) });
+      setMerchant(created);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
   const changeName = v => {
     setName(v);
     if (!shortTouched) setShort(v.trim().slice(0, 2).toUpperCase());
@@ -630,6 +653,7 @@ function MerchantOnboarding() {
       <h1>Willkommen, {user.name}</h1>
       <div className="tagline">Richte dein Geschäft ein, bevor du Angebote veröffentlichen kannst.</div>
       <div className="auth-box">
+        {err && <div className="err">{err}</div>}
         <div className="field">
           <label>Geschäftsname</label>
           <input value={name} onChange={e => changeName(e.target.value)} placeholder="z.B. Café Sonntag" />
@@ -698,6 +722,11 @@ function MerchantOnboarding() {
                 </p>
               </>}
         </div>
+
+        <button className="btn" onClick={submit} disabled={!complete || saving} style={{ marginTop: 6 }}>
+          {saving ? 'Wird angelegt...' : 'Geschäft anlegen'}
+        </button>
+        {!complete && <div className="hint">Alle Pflichtfelder inkl. Standort ausfüllen.</div>}
       </div>
     </div>
   );
