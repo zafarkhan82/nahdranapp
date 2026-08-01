@@ -135,6 +135,9 @@ body{font-family:var(--body);color:var(--ink);background:var(--pflaster)}
 .field input:focus,.field select:focus{border-color:var(--ink)}
 .err{background:#FEE;border:1px solid #E88;color:#922;padding:10px 12px;font-size:13px;border-radius:2px}
 .link{background:none;border:0;color:var(--emaille);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;margin-top:6px;text-align:center}
+.legal-links{text-align:center;margin-top:2px;font-size:11.5px;color:var(--grau)}
+.legal-links a{color:var(--grau);text-decoration:underline}
+.legal-links a:hover{color:var(--ink)}
 
 /* Search */
 .search-bar{padding:12px 14px 8px;position:sticky;top:0;background:var(--pflaster);z-index:4}
@@ -318,6 +321,11 @@ function AuthScreen() {
         <button className="link" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); }}>
           {mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Anmelden'}
         </button>
+        <div className="legal-links">
+          <a href="/impressum" target="_blank" rel="noopener noreferrer">Impressum</a>
+          {' · '}
+          <a href="/datenschutz" target="_blank" rel="noopener noreferrer">Datenschutz</a>
+        </div>
         {mode === 'login' && (
           <div style={{ fontSize: 11, color: 'var(--grau)', textAlign: 'center', marginTop: 8, fontFamily: 'var(--mono)' }}>
             Kunde: kunde@demo.de / demo123<br/>Händler: cafe@demo.de / demo123
