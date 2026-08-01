@@ -679,11 +679,17 @@ app.get('/api/categories', (req, res) => {
 
 // ─── Rechtliche Seiten (statisches HTML) ────────────────────────────────
 //
-// TODO: Vor Live-Gang mit echten Daten ausfüllen — rechtliche Prüfung durch
-// den Betreiber erforderlich, nicht automatisch generierbar.
-// Alle Angaben in eckigen Klammern sind Platzhalter und MÜSSEN vor der
-// Veröffentlichung durch die tatsächlichen Angaben des Anbieters ersetzt
-// werden. Fehlende oder falsche Pflichtangaben sind abmahnfähig.
+// Angaben vom Betreiber (Projektteam 50Meter, Stand August 2026). Offene
+// Punkte, die der Betreiber selbst prüfen bzw. entscheiden muss:
+//  - § 5 DDG verlangt bei nicht eingetragenen Gewerben grundsätzlich die
+//    Namen der verantwortlichen natürlichen Personen. Die Nennung erst auf
+//    Anfrage ist eine bewusste Entscheidung des Betreibers und rechtlich
+//    angreifbar.
+//  - Für das Hosting bei Hetzner ist ein Auftragsverarbeitungsvertrag nach
+//    Art. 28 DSGVO erforderlich.
+//  - Google Fonts und cdnjs werden derzeit von externen Servern geladen und
+//    sind deshalb in der Datenschutzerklärung ausgewiesen. Sauberer wäre es,
+//    beide selbst zu hosten; dann entfällt der Abschnitt.
 
 function legalPage(title, body) {
   return `<!DOCTYPE html>
@@ -707,8 +713,8 @@ p,li{font-size:15px}
 ul{padding-left:20px;margin-top:4px}
 li{margin-top:3px}
 address{font-style:normal;font-size:15px}
-.ph{font-family:var(--mono);font-size:14px;background:var(--weiss);border:1px dashed var(--linie);padding:1px 5px;white-space:nowrap}
-.note{background:var(--weiss);border-left:3px solid var(--signal);padding:12px 14px;font-size:13.5px;color:var(--grau);margin:18px 0 4px}
+a{color:var(--emaille)}
+.stand{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grau);margin-top:30px;border-top:1px solid var(--linie);padding-top:12px}
 </style>
 </head>
 <body>
@@ -722,49 +728,45 @@ ${body}
 </html>`;
 }
 
-const PLACEHOLDER_NOTE = `<div class="note">Hinweis für den Betreiber: Alle in eckigen Klammern gesetzten Angaben sind
-Platzhalter und müssen vor dem Live-Gang durch die tatsächlichen Angaben ersetzt und rechtlich geprüft werden.</div>`;
-
 app.get('/impressum', (req, res) => {
   res.type('html').send(legalPage('Impressum', `
-${PLACEHOLDER_NOTE}
-
 <h2>Angaben gemäß § 5 DDG</h2>
 <address>
-<span class="ph">[Name des Anbieters]</span><br>
-<span class="ph">[Rechtsform, falls Unternehmen]</span><br>
-<span class="ph">[Anschrift: Straße und Hausnummer]</span><br>
-<span class="ph">[PLZ und Ort]</span><br>
-<span class="ph">[Land]</span>
+Projektteam 50Meter<br>
+Rohrmühlstraße 1<br>
+63075 Offenbach am Main<br>
+Deutschland
 </address>
 
 <h2>Vertreten durch</h2>
-<p><span class="ph">[Name der vertretungsberechtigten Person]</span></p>
+<p>Die Namen der verantwortlichen Personen des Projektteams nennen wir auf Anfrage unter
+<a href="mailto:info@50meter.de">info@50meter.de</a>.</p>
 
 <h2>Kontakt</h2>
 <ul>
-<li>E-Mail: <span class="ph">[E-Mail-Adresse]</span></li>
-<li>Telefon: <span class="ph">[Telefonnummer, falls vorhanden]</span></li>
+<li>E-Mail: <a href="mailto:info@50meter.de">info@50meter.de</a></li>
+<li>Eine Telefonnummer wird nicht vorgehalten; Anfragen beantworten wir per E-Mail.</li>
 </ul>
 
-<h2>Registereintrag</h2>
-<ul>
-<li>Registergericht: <span class="ph">[Registergericht, falls vorhanden]</span></li>
-<li>Registernummer: <span class="ph">[Registernummer, falls vorhanden]</span></li>
-</ul>
+<h2>Gewerbe und Registereintrag</h2>
+<p>Das Gewerbe ist beim Gewerbeamt der Stadt Offenbach am Main angemeldet. Eine Eintragung im
+Handels-, Vereins-, Partnerschafts- oder Genossenschaftsregister besteht nicht.</p>
 
-<h2>Umsatzsteuer-Identifikationsnummer</h2>
-<p>Gemäß § 27 a Umsatzsteuergesetz: <span class="ph">[Umsatzsteuer-ID, falls vorhanden]</span></p>
+<h2>Umsatzsteuer</h2>
+<p>Eine Umsatzsteuer-Identifikationsnummer gemäß § 27 a Umsatzsteuergesetz liegt nicht vor.
+Nahdran wird als Teilgewerbe und Testprojekt betrieben und ist für alle Nutzerinnen, Nutzer und
+Geschäfte kostenfrei; es werden keine umsatzsteuerpflichtigen Leistungen abgerechnet.</p>
 
 <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
 <address>
-<span class="ph">[Name]</span><br>
-<span class="ph">[Anschrift]</span>
+Projektteam 50Meter<br>
+Rohrmühlstraße 1<br>
+63075 Offenbach am Main
 </address>
 
 <h2>Verbraucherstreitbeilegung</h2>
-<p><span class="ph">[Angabe, ob eine Teilnahme an einem Streitbeilegungsverfahren vor einer
-Verbraucherschlichtungsstelle erfolgt — bitte ergänzen]</span></p>
+<p>Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer
+Verbraucherschlichtungsstelle teilzunehmen.</p>
 
 <h2>Haftung für Inhalte und Links</h2>
 <p>Die Inhalte dieser Anwendung werden mit Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit
@@ -774,22 +776,25 @@ externer Links sind ausschließlich deren Betreiber verantwortlich.</p>
 <h2>Datenschutz</h2>
 <p>Informationen zur Verarbeitung personenbezogener Daten findest du in der
 <a href="/datenschutz">Datenschutzerklärung</a>.</p>
+
+<p class="stand">Stand: August 2026</p>
 `));
 });
 
 app.get('/datenschutz', (req, res) => {
   res.type('html').send(legalPage('Datenschutz', `
-${PLACEHOLDER_NOTE}
-
 <h2>1. Verantwortliche Stelle</h2>
 <p>Verantwortlich für die Datenverarbeitung in dieser Anwendung ist:</p>
 <address>
-<span class="ph">[Name des Anbieters]</span><br>
-<span class="ph">[Anschrift]</span><br>
-E-Mail: <span class="ph">[E-Mail-Adresse]</span><br>
-Telefon: <span class="ph">[Telefonnummer, falls vorhanden]</span>
+Projektteam 50Meter<br>
+Rohrmühlstraße 1<br>
+63075 Offenbach am Main<br>
+Deutschland<br>
+E-Mail: <a href="mailto:info@50meter.de">info@50meter.de</a>
 </address>
-<p>Datenschutzbeauftragte Person: <span class="ph">[Name und Kontakt, falls benannt]</span></p>
+<p>Die Namen der verantwortlichen Personen nennen wir auf Anfrage. Eine Datenschutzbeauftragte
+oder ein Datenschutzbeauftragter ist nicht benannt, da die Voraussetzungen des § 38 BDSG nicht
+vorliegen.</p>
 
 <h2>2. Welche Daten wir erheben</h2>
 <ul>
@@ -823,16 +828,26 @@ in den Browsereinstellungen.</p>
 <li>Kontodaten: bis zur Löschung des Kontos.</li>
 <li>Standortdaten: nur für die Dauer der jeweiligen Sitzung zur Entfernungsberechnung; sie werden
 nicht dauerhaft gespeichert.</li>
-<li>Gutscheine und Einlösedaten: <span class="ph">[Aufbewahrungsdauer angeben, z. B. bis zum Ablauf
-gesetzlicher Aufbewahrungsfristen]</span></li>
+<li>Gutscheine und Einlösedaten: bis zur Löschung des Kontos. Da Nahdran kostenfrei ist und keine
+Rechnungen entstehen, greifen keine handels- oder steuerrechtlichen Aufbewahrungsfristen.</li>
 </ul>
 
 <h2>6. Empfänger und Auftragsverarbeiter</h2>
-<p>Hosting und technischer Betrieb: <span class="ph">[Name und Anschrift des Hosting-Anbieters]</span>.
-Weitere Empfänger: <span class="ph">[weitere Dienstleister, falls vorhanden]</span>. Eine Übermittlung
-in Drittländer findet statt: <span class="ph">[ja/nein — ggf. Grundlage angeben]</span>.</p>
+<p>Hosting und technischer Betrieb erfolgen auf einem Server der Hetzner Online GmbH,
+Industriestraße 25, 91710 Gunzenhausen, Deutschland. Die Daten werden in Deutschland gespeichert.
+Weitere Dienstleister setzen wir nicht ein; die Daten werden nicht verkauft und nicht zu
+Werbezwecken an Dritte weitergegeben.</p>
 
-<h2>7. Deine Rechte</h2>
+<h2>7. Externe Inhalte: Schriftarten und Programmbibliotheken</h2>
+<p>Die Anwendung lädt beim Aufruf Schriftarten von Google Fonts (Google Ireland Limited, Gordon
+House, Barrow Street, Dublin 4, Irland) sowie Programmbibliotheken von cdnjs (Cloudflare, Inc.,
+101 Townsend St., San Francisco, CA 94107, USA). Dabei wird deine IP-Adresse an diese Anbieter
+übertragen; im Fall von Cloudflare kann dies eine Übermittlung in die USA bedeuten. Rechtsgrundlage
+ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einer einheitlichen und schnellen
+Auslieferung der Anwendung). Wenn du das vermeiden möchtest, kannst du das Laden externer
+Ressourcen in deinem Browser unterbinden; die Anwendung ist dann eingeschränkt nutzbar.</p>
+
+<h2>8. Deine Rechte</h2>
 <ul>
 <li>Auskunft über die zu deiner Person gespeicherten Daten (Art. 15 DSGVO)</li>
 <li>Berichtigung unrichtiger Daten (Art. 16 DSGVO)</li>
@@ -840,16 +855,18 @@ in Drittländer findet statt: <span class="ph">[ja/nein — ggf. Grundlage angeb
 <li>Datenübertragbarkeit (Art. 20 DSGVO)</li>
 <li>Widerspruch gegen die Verarbeitung (Art. 21 DSGVO)</li>
 <li>Widerruf erteilter Einwilligungen (Art. 7 Abs. 3 DSGVO)</li>
-<li>Beschwerde bei einer Aufsichtsbehörde (Art. 77 DSGVO), zuständig ist
-<span class="ph">[zuständige Aufsichtsbehörde]</span></li>
+<li>Beschwerde bei einer Aufsichtsbehörde (Art. 77 DSGVO). Zuständig ist der Hessische Beauftragte
+für Datenschutz und Informationsfreiheit, Gustav-Stresemann-Ring 1, 65189 Wiesbaden.</li>
 </ul>
 
-<h2>8. Kontakt für Datenschutzanfragen</h2>
-<p>Anfragen zum Datenschutz richtest du bitte an <span class="ph">[E-Mail-Adresse für
-Datenschutzanfragen]</span> oder postalisch an <span class="ph">[Anschrift]</span>.</p>
+<h2>9. Kontakt für Datenschutzanfragen</h2>
+<p>Anfragen zum Datenschutz richtest du bitte an <a href="mailto:info@50meter.de">info@50meter.de</a>
+oder postalisch an Projektteam 50Meter, Rohrmühlstraße 1, 63075 Offenbach am Main.</p>
 
-<h2>9. Impressum</h2>
+<h2>10. Impressum</h2>
 <p>Die Anbieterkennzeichnung findest du im <a href="/impressum">Impressum</a>.</p>
+
+<p class="stand">Stand: August 2026</p>
 `));
 });
 
