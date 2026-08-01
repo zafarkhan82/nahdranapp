@@ -872,6 +872,32 @@ function PushBanner({ push, onTap, onDismiss }) {
   );
 }
 
+// ─── Geo Consent Sheet ──────────────────────────────────────────────
+function GeoConsentSheet({ onAccept, onDecline }) {
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onDecline()}>
+      <div className="sheet">
+        <div className="sheet-scroll">
+          <div className="d-body">
+            <h2 style={{ marginTop: 0 }}>Standort verwenden?</h2>
+            <p style={{ fontSize: 14, color: 'var(--grau)', lineHeight: 1.6 }}>
+              Nahdran nutzt deinen Standort, um Angebote in deiner Nähe zu zeigen.
+              Dein Standortverlauf wird nicht gespeichert.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--grau)', marginTop: 10 }}>
+              Mehr dazu in der <a href="/datenschutz" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--emaille)' }}>Datenschutzerklärung</a>.
+            </p>
+          </div>
+        </div>
+        <div className="sheet-foot">
+          <button className="btn" onClick={onAccept}>Verstanden, Standort erlauben</button>
+          <button className="btn sec" style={{ marginTop: 8 }} onClick={onDecline}>Nicht jetzt</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState(null);
@@ -879,6 +905,7 @@ function App() {
   const [tab, setTab] = useState('naehe');
   const [geo, setGeo] = useState({ lat: 50.1005, lng: 8.7648, source: 'default' });
   const [geoAsked, setGeoAsked] = useState(false);
+  const [geoConsent, setGeoConsent] = useState(false);
   const [feedData, setFeedData] = useState(null);
   const [radius, setRadius] = useState(500);
   const [category, setCategory] = useState(null);
@@ -895,8 +922,9 @@ function App() {
     }
   }, []);
 
-  // geo
+  // geo — eigener Einwilligungsschritt vor dem nativen Browser-Dialog
   const requestGeo = () => {
+    setGeoConsent(false);
     setGeoAsked(true);
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -977,11 +1005,15 @@ function App() {
         </header>
 
         {!isMerchant && !geoAsked && (
-          <div className="geo-bar" onClick={requestGeo}>
+          <div className="geo-bar" onClick={() => setGeoConsent(true)}>
             <span>Standort aktivieren für genauere Entfernungen</span>
             <button>Aktivieren</button>
           </div>
         )}
+
+        {geoConsent && <GeoConsentSheet
+          onAccept={requestGeo}
+          onDecline={() => { setGeoConsent(false); setGeoAsked(true); }} />}
 
         <div className="main" key={refreshKey}>
           {isMerchant
