@@ -856,6 +856,9 @@ Datenschutzanfragen]</span> oder postalisch an <span class="ph">[Anschrift]</spa
 // ─── Seed Data ──────────────────────────────────────────────────────────
 
 function seed() {
+  // SEED_DEMO_DATA auf false setzen, sobald echte Händler im System sind, um
+  // Demo-Daten beim nächsten Neuaufsetzen der DB nicht erneut zu erzeugen.
+  if (process.env.SEED_DEMO_DATA === 'false') return;
   if (db.prepare('SELECT COUNT(*) as n FROM categories').get().n > 0) return;
 
   console.log('Seeding database...');
