@@ -572,14 +572,61 @@ function haversineJS(lat1, lng1, lat2, lng2) {
 // ─── Merchant Onboarding ────────────────────────────────────────────
 function MerchantOnboarding() {
   const { user } = useContext(AppCtx);
+  const [categories, setCategories] = useState([]);
+  const [name, setName] = useState('');
+  const [short, setShort] = useState('');
+  const [shortTouched, setShortTouched] = useState(false);
+  const [categoryId, setCategoryId] = useState('');
+  const [street, setStreet] = useState('');
+  const [houseNumber, setHouseNumber] = useState('');
+  const [description, setDescription] = useState('');
+
+  useEffect(() => { api('/api/categories').then(setCategories).catch(() => {}); }, []);
+
+  const changeName = v => {
+    setName(v);
+    if (!shortTouched) setShort(v.trim().slice(0, 2).toUpperCase());
+  };
 
   return (
     <div className="auth-page">
       <h1>Willkommen, {user.name}</h1>
       <div className="tagline">Richte dein Geschäft ein, bevor du Angebote veröffentlichen kannst.</div>
       <div className="auth-box">
-        <div style={{ fontSize: 13, color: 'var(--grau)', lineHeight: 1.6 }}>
-          Hier entsteht das Einrichtungsformular.
+        <div className="field">
+          <label>Geschäftsname</label>
+          <input value={name} onChange={e => changeName(e.target.value)} placeholder="z.B. Café Sonntag" />
+        </div>
+        <div className="field">
+          <label>Kurzform für Avatar (max. 2 Zeichen)</label>
+          <input value={short} maxLength={2}
+            onChange={e => { setShortTouched(true); setShort(e.target.value.toUpperCase()); }}
+            placeholder="CS" />
+        </div>
+        <div className="field">
+          <label>Kategorie</label>
+          <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+            <option value="">Bitte wählen</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div className="field" style={{ flex: 2 }}>
+            <label>Straße</label>
+            <input value={street} onChange={e => setStreet(e.target.value)} placeholder="Kaiserstraße" />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Hausnummer</label>
+            <input type="number" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="14" />
+          </div>
+        </div>
+        <div className="field">
+          <label>Kurzbeschreibung (optional)</label>
+          <textarea value={description} maxLength={200} rows={3}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Was macht dein Geschäft aus?"
+            style={{ border: '1px solid var(--linie)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--body)', fontSize: 14, background: 'var(--weiss)', color: 'var(--ink)', outline: 0, resize: 'vertical' }} />
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--grau)', textAlign: 'right' }}>{description.length}/200</div>
         </div>
       </div>
     </div>
