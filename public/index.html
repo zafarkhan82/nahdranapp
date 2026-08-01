@@ -135,6 +135,9 @@ body{font-family:var(--body);color:var(--ink);background:var(--pflaster)}
 .field input:focus,.field select:focus{border-color:var(--ink)}
 .err{background:#FEE;border:1px solid #E88;color:#922;padding:10px 12px;font-size:13px;border-radius:2px}
 .link{background:none;border:0;color:var(--emaille);font:inherit;font-size:13px;cursor:pointer;text-decoration:underline;margin-top:6px;text-align:center}
+.legal-links{text-align:center;margin-top:2px;font-size:11.5px;color:var(--grau)}
+.legal-links a{color:var(--grau);text-decoration:underline}
+.legal-links a:hover{color:var(--ink)}
 
 /* Search */
 .search-bar{padding:12px 14px 8px;position:sticky;top:0;background:var(--pflaster);z-index:4}
@@ -180,6 +183,18 @@ body{font-family:var(--body);color:var(--ink);background:var(--pflaster)}
 .scan-result.ok{background:#E6F4EA;border:1px solid #81C784;color:#1B5E20}
 .scan-result.err{background:#FDECEA;border:1px solid #E57373;color:#B71C1C}
 .scan-result.dup{background:#FFF8E1;border:1px solid #FFD54F;color:#F57F17}
+
+/* Merchant onboarding */
+.onb-sec{border-top:1px solid var(--linie);margin-top:6px;padding-top:12px}
+.onb-sec > h3{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);font-weight:400;margin-bottom:8px}
+.onb-geo{background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:11px 12px;display:flex;align-items:center;gap:10px}
+.onb-geo .coords{flex:1;font-family:var(--mono);font-size:12.5px}
+.onb-geo .coords small{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grau)}
+.onb-change{background:none;border:1px solid var(--linie);border-radius:2px;padding:6px 10px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer}
+.onb-change:hover{border-color:var(--ink)}
+.onb-or{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);text-align:center;margin:10px 0 8px}
+.onb-hint{font-size:12px;color:var(--grau);line-height:1.55}
+.onb-hint a{color:var(--emaille)}
 
 /* Create offer form */
 .form-wrap{padding:14px}
@@ -258,7 +273,7 @@ const SearchSVG = () => <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/>
 
 // ─── Auth Screen ────────────────────────────────────────────────────
 function AuthScreen() {
-  const { setUser } = useContext(AppCtx);
+  const { setUser, setMerchant } = useContext(AppCtx);
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('kunde@demo.de');
   const [pw, setPw] = useState('demo123');
@@ -274,6 +289,10 @@ function AuthScreen() {
         ? await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password: pw }) })
         : await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password: pw, name, role }) });
       localStorage.setItem('nahdran_token', data.token);
+      if (data.user.role === 'merchant') {
+        const me = await api('/api/auth/me');
+        setMerchant(me.merchant || null);
+      }
       setUser(data.user);
     } catch (e) { setErr(e.message); }
     setLoading(false);
@@ -302,6 +321,11 @@ function AuthScreen() {
         <button className="link" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); }}>
           {mode === 'login' ? 'Noch kein Konto? Registrieren' : 'Schon registriert? Anmelden'}
         </button>
+        <div className="legal-links">
+          <a href="/impressum" target="_blank" rel="noopener noreferrer">Impressum</a>
+          {' · '}
+          <a href="/datenschutz" target="_blank" rel="noopener noreferrer">Datenschutz</a>
+        </div>
         {mode === 'login' && (
           <div style={{ fontSize: 11, color: 'var(--grau)', textAlign: 'center', marginTop: 8, fontFamily: 'var(--mono)' }}>
             Kunde: kunde@demo.de / demo123<br/>Händler: cafe@demo.de / demo123
@@ -565,6 +589,165 @@ function haversineJS(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ─── Merchant Onboarding ────────────────────────────────────────────
+function MerchantOnboarding() {
+  const { user, setMerchant } = useContext(AppCtx);
+  const [categories, setCategories] = useState([]);
+  const [name, setName] = useState('');
+  const [short, setShort] = useState('');
+  const [shortTouched, setShortTouched] = useState(false);
+  const [categoryId, setCategoryId] = useState('');
+  const [street, setStreet] = useState('');
+  const [houseNumber, setHouseNumber] = useState('');
+  const [description, setDescription] = useState('');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [geoSource, setGeoSource] = useState(null); // null | 'gps' | 'manual'
+  const [locating, setLocating] = useState(false);
+  const [geoErr, setGeoErr] = useState('');
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const latNum = parseFloat(lat), lngNum = parseFloat(lng);
+  const hasLocation = Number.isFinite(latNum) && Number.isFinite(lngNum) && (latNum !== 0 || lngNum !== 0);
+  const missing = [
+    [!name.trim(), 'Geschäftsname'],
+    [!short.trim(), 'Kurzform'],
+    [!categoryId, 'Kategorie'],
+    [!street.trim(), 'Straße'],
+    [houseNumber === '', 'Hausnummer'],
+    [!hasLocation, 'Standort']
+  ].filter(([m]) => m).map(([, label]) => label);
+  const complete = missing.length === 0;
+
+  useEffect(() => { api('/api/categories').then(setCategories).catch(() => {}); }, []);
+
+  const useCurrentPosition = () => {
+    setGeoErr('');
+    if (!('geolocation' in navigator)) { setGeoErr('Dein Browser unterstützt keine Standortbestimmung. Bitte trage die Koordinaten manuell ein.'); setGeoSource('manual'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLat(pos.coords.latitude.toFixed(5));
+        setLng(pos.coords.longitude.toFixed(5));
+        setGeoSource('gps');
+        setLocating(false);
+      },
+      () => {
+        setGeoErr('Standort konnte nicht ermittelt werden. Bitte trage die Koordinaten manuell ein.');
+        setGeoSource('manual');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  const submit = async () => {
+    setErr(''); setSaving(true);
+    try {
+      const created = await api('/api/merchant/setup', { method: 'POST', body: JSON.stringify({
+        name: name.trim(),
+        short: short.trim().toUpperCase(),
+        category_id: categoryId,
+        street: street.trim(),
+        house_number: parseInt(houseNumber, 10),
+        lat: latNum,
+        lng: lngNum,
+        description: description.trim()
+      }) });
+      setMerchant(created);
+    } catch (e) { setErr(e.message); setSaving(false); }
+  };
+
+  const changeName = v => {
+    setName(v);
+    if (!shortTouched) setShort(v.trim().slice(0, 2).toUpperCase());
+  };
+
+  return (
+    <div className="auth-page">
+      <h1>Willkommen, {user.name}</h1>
+      <div className="tagline">Richte dein Geschäft ein, bevor du Angebote veröffentlichen kannst.</div>
+      <div className="auth-box">
+        {err && <div className="err">{err}</div>}
+        <div className="field">
+          <label>Geschäftsname</label>
+          <input autoComplete="off" value={name} onChange={e => changeName(e.target.value)} placeholder="z.B. Café Sonntag" />
+        </div>
+        <div className="field">
+          <label>Kurzform für Avatar (max. 2 Zeichen)</label>
+          <input autoComplete="off" value={short} maxLength={2}
+            onChange={e => { setShortTouched(true); setShort(e.target.value.toUpperCase()); }}
+            placeholder="CS" />
+        </div>
+        <div className="field">
+          <label>Kategorie</label>
+          <select autoComplete="off" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+            <option value="">Bitte wählen</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div className="field" style={{ flex: 2 }}>
+            <label>Straße</label>
+            <input autoComplete="off" value={street} onChange={e => setStreet(e.target.value)} placeholder="Kaiserstraße" />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Hausnummer</label>
+            <input autoComplete="off" type="number" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="14" />
+          </div>
+        </div>
+        <div className="field">
+          <label>Kurzbeschreibung (optional)</label>
+          <textarea autoComplete="off" value={description} maxLength={200} rows={3}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Was macht dein Geschäft aus?"
+            style={{ border: '1px solid var(--linie)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--body)', fontSize: 14, background: 'var(--weiss)', color: 'var(--ink)', outline: 0, resize: 'vertical' }} />
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--grau)', textAlign: 'right' }}>{description.length}/200</div>
+        </div>
+
+        <div className="onb-sec">
+          <h3>Standort</h3>
+          {geoErr && <div className="err" style={{ marginBottom: 8 }}>{geoErr}</div>}
+          {geoSource === 'gps'
+            ? <div className="onb-geo">
+                <span className="coords"><small>Standort erfasst</small>{lat}, {lng}</span>
+                <button className="onb-change" onClick={() => setGeoSource('manual')}>Ändern</button>
+              </div>
+            : <>
+                <button className="btn sec" onClick={useCurrentPosition} disabled={locating}>
+                  {locating ? 'Standort wird ermittelt...' : 'Meinen aktuellen Standort verwenden'}
+                </button>
+                <div className="onb-or">oder manuell eintragen</div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Breitengrad</label>
+                    <input autoComplete="off" type="number" step="0.00001" value={lat}
+                      onChange={e => { setLat(e.target.value); setGeoSource('manual'); }} placeholder="50.10082" />
+                  </div>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Längengrad</label>
+                    <input autoComplete="off" type="number" step="0.00001" value={lng}
+                      onChange={e => { setLng(e.target.value); setGeoSource('manual'); }} placeholder="8.76432" />
+                  </div>
+                </div>
+                <p className="onb-hint">
+                  Findest du die Koordinaten nicht? Suche deine Adresse bei{' '}
+                  <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">maps.google.com</a>,
+                  {' '}Rechtsklick auf den Punkt zeigt sie an.
+                </p>
+              </>}
+        </div>
+
+        <button className="btn" onClick={submit} disabled={!complete || saving} style={{ marginTop: 6 }}>
+          {saving ? 'Wird angelegt...' : 'Geschäft anlegen'}
+        </button>
+        {!complete && <div className="hint">Noch offen: {missing.join(', ')}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Merchant Dashboard ─────────────────────────────────────────────
 function MerchantDashboard() {
   const [stats, setStats] = useState(null);
@@ -697,12 +880,40 @@ function PushBanner({ push, onTap, onDismiss }) {
   );
 }
 
+// ─── Geo Consent Sheet ──────────────────────────────────────────────
+function GeoConsentSheet({ onAccept, onDecline }) {
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onDecline()}>
+      <div className="sheet">
+        <div className="sheet-scroll">
+          <div className="d-body">
+            <h2 style={{ marginTop: 0 }}>Standort verwenden?</h2>
+            <p style={{ fontSize: 14, color: 'var(--grau)', lineHeight: 1.6 }}>
+              Nahdran nutzt deinen Standort, um Angebote in deiner Nähe zu zeigen.
+              Dein Standortverlauf wird nicht gespeichert.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--grau)', marginTop: 10 }}>
+              Mehr dazu in der <a href="/datenschutz" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--emaille)' }}>Datenschutzerklärung</a>.
+            </p>
+          </div>
+        </div>
+        <div className="sheet-foot">
+          <button className="btn" onClick={onAccept}>Verstanden, Standort erlauben</button>
+          <button className="btn sec" style={{ marginTop: 8 }} onClick={onDecline}>Nicht jetzt</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState(null);
+  const [merchant, setMerchant] = useState(null);
   const [tab, setTab] = useState('naehe');
   const [geo, setGeo] = useState({ lat: 50.1005, lng: 8.7648, source: 'default' });
   const [geoAsked, setGeoAsked] = useState(false);
+  const [geoConsent, setGeoConsent] = useState(false);
   const [feedData, setFeedData] = useState(null);
   const [radius, setRadius] = useState(500);
   const [category, setCategory] = useState(null);
@@ -714,12 +925,14 @@ function App() {
   // restore session
   useEffect(() => {
     if (getToken()) {
-      api('/api/auth/me').then(d => setUser(d.user)).catch(() => localStorage.removeItem('nahdran_token'));
+      api('/api/auth/me').then(d => { setMerchant(d.merchant || null); setUser(d.user); })
+        .catch(() => localStorage.removeItem('nahdran_token'));
     }
   }, []);
 
-  // geo
+  // geo — eigener Einwilligungsschritt vor dem nativen Browser-Dialog
   const requestGeo = () => {
+    setGeoConsent(false);
     setGeoAsked(true);
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -769,9 +982,9 @@ function App() {
     setFeedData(fd => fd ? { ...fd, offers: fd.offers.map(o => o.id === offer.id ? { ...o, is_favourite: !o.is_favourite } : o) } : fd);
   };
 
-  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setFeedData(null); };
+  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setMerchant(null); setFeedData(null); };
 
-  const ctx = { user, setUser, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab };
+  const ctx = { user, setUser, merchant, setMerchant, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab };
 
   if (!user) return <AppCtx.Provider value={ctx}><AuthScreen /></AppCtx.Provider>;
 
@@ -800,15 +1013,19 @@ function App() {
         </header>
 
         {!isMerchant && !geoAsked && (
-          <div className="geo-bar" onClick={requestGeo}>
+          <div className="geo-bar" onClick={() => setGeoConsent(true)}>
             <span>Standort aktivieren für genauere Entfernungen</span>
             <button>Aktivieren</button>
           </div>
         )}
 
+        {geoConsent && <GeoConsentSheet
+          onAccept={requestGeo}
+          onDecline={() => { setGeoConsent(false); setGeoAsked(true); }} />}
+
         <div className="main" key={refreshKey}>
           {isMerchant
-            ? <MerchantDashboard />
+            ? (merchant ? <MerchantDashboard /> : <MerchantOnboarding />)
             : <>
                 {tab === 'naehe' && <FeedScreen />}
                 {tab === 'suche' && <SearchScreen />}
