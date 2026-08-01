@@ -258,7 +258,7 @@ const SearchSVG = () => <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/>
 
 // ─── Auth Screen ────────────────────────────────────────────────────
 function AuthScreen() {
-  const { setUser } = useContext(AppCtx);
+  const { setUser, setMerchant } = useContext(AppCtx);
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('kunde@demo.de');
   const [pw, setPw] = useState('demo123');
@@ -274,6 +274,10 @@ function AuthScreen() {
         ? await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password: pw }) })
         : await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password: pw, name, role }) });
       localStorage.setItem('nahdran_token', data.token);
+      if (data.user.role === 'merchant') {
+        const me = await api('/api/auth/me');
+        setMerchant(me.merchant || null);
+      }
       setUser(data.user);
     } catch (e) { setErr(e.message); }
     setLoading(false);
@@ -565,6 +569,23 @@ function haversineJS(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ─── Merchant Onboarding ────────────────────────────────────────────
+function MerchantOnboarding() {
+  const { user } = useContext(AppCtx);
+
+  return (
+    <div className="auth-page">
+      <h1>Willkommen, {user.name}</h1>
+      <div className="tagline">Richte dein Geschäft ein, bevor du Angebote veröffentlichen kannst.</div>
+      <div className="auth-box">
+        <div style={{ fontSize: 13, color: 'var(--grau)', lineHeight: 1.6 }}>
+          Hier entsteht das Einrichtungsformular.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Merchant Dashboard ─────────────────────────────────────────────
 function MerchantDashboard() {
   const [stats, setStats] = useState(null);
@@ -700,6 +721,7 @@ function PushBanner({ push, onTap, onDismiss }) {
 // ─── App ────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState(null);
+  const [merchant, setMerchant] = useState(null);
   const [tab, setTab] = useState('naehe');
   const [geo, setGeo] = useState({ lat: 50.1005, lng: 8.7648, source: 'default' });
   const [geoAsked, setGeoAsked] = useState(false);
@@ -714,7 +736,8 @@ function App() {
   // restore session
   useEffect(() => {
     if (getToken()) {
-      api('/api/auth/me').then(d => setUser(d.user)).catch(() => localStorage.removeItem('nahdran_token'));
+      api('/api/auth/me').then(d => { setMerchant(d.merchant || null); setUser(d.user); })
+        .catch(() => localStorage.removeItem('nahdran_token'));
     }
   }, []);
 
@@ -769,9 +792,9 @@ function App() {
     setFeedData(fd => fd ? { ...fd, offers: fd.offers.map(o => o.id === offer.id ? { ...o, is_favourite: !o.is_favourite } : o) } : fd);
   };
 
-  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setFeedData(null); };
+  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setMerchant(null); setFeedData(null); };
 
-  const ctx = { user, setUser, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab };
+  const ctx = { user, setUser, merchant, setMerchant, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab };
 
   if (!user) return <AppCtx.Provider value={ctx}><AuthScreen /></AppCtx.Provider>;
 
@@ -808,7 +831,7 @@ function App() {
 
         <div className="main" key={refreshKey}>
           {isMerchant
-            ? <MerchantDashboard />
+            ? (merchant ? <MerchantDashboard /> : <MerchantOnboarding />)
             : <>
                 {tab === 'naehe' && <FeedScreen />}
                 {tab === 'suche' && <SearchScreen />}
