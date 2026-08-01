@@ -181,6 +181,18 @@ body{font-family:var(--body);color:var(--ink);background:var(--pflaster)}
 .scan-result.err{background:#FDECEA;border:1px solid #E57373;color:#B71C1C}
 .scan-result.dup{background:#FFF8E1;border:1px solid #FFD54F;color:#F57F17}
 
+/* Merchant onboarding */
+.onb-sec{border-top:1px solid var(--linie);margin-top:6px;padding-top:12px}
+.onb-sec > h3{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);font-weight:400;margin-bottom:8px}
+.onb-geo{background:var(--weiss);border:1px solid var(--linie);border-radius:2px;padding:11px 12px;display:flex;align-items:center;gap:10px}
+.onb-geo .coords{flex:1;font-family:var(--mono);font-size:12.5px}
+.onb-geo .coords small{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--grau)}
+.onb-change{background:none;border:1px solid var(--linie);border-radius:2px;padding:6px 10px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer}
+.onb-change:hover{border-color:var(--ink)}
+.onb-or{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);text-align:center;margin:10px 0 8px}
+.onb-hint{font-size:12px;color:var(--grau);line-height:1.55}
+.onb-hint a{color:var(--emaille)}
+
 /* Create offer form */
 .form-wrap{padding:14px}
 .form-wrap .field{margin-bottom:10px}
@@ -580,8 +592,33 @@ function MerchantOnboarding() {
   const [street, setStreet] = useState('');
   const [houseNumber, setHouseNumber] = useState('');
   const [description, setDescription] = useState('');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [geoSource, setGeoSource] = useState(null); // null | 'gps' | 'manual'
+  const [locating, setLocating] = useState(false);
+  const [geoErr, setGeoErr] = useState('');
 
   useEffect(() => { api('/api/categories').then(setCategories).catch(() => {}); }, []);
+
+  const useCurrentPosition = () => {
+    setGeoErr('');
+    if (!('geolocation' in navigator)) { setGeoErr('Dein Browser unterstützt keine Standortbestimmung. Bitte trage die Koordinaten manuell ein.'); setGeoSource('manual'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLat(pos.coords.latitude.toFixed(5));
+        setLng(pos.coords.longitude.toFixed(5));
+        setGeoSource('gps');
+        setLocating(false);
+      },
+      () => {
+        setGeoErr('Standort konnte nicht ermittelt werden. Bitte trage die Koordinaten manuell ein.');
+        setGeoSource('manual');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
 
   const changeName = v => {
     setName(v);
@@ -627,6 +664,39 @@ function MerchantOnboarding() {
             placeholder="Was macht dein Geschäft aus?"
             style={{ border: '1px solid var(--linie)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--body)', fontSize: 14, background: 'var(--weiss)', color: 'var(--ink)', outline: 0, resize: 'vertical' }} />
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--grau)', textAlign: 'right' }}>{description.length}/200</div>
+        </div>
+
+        <div className="onb-sec">
+          <h3>Standort</h3>
+          {geoErr && <div className="err" style={{ marginBottom: 8 }}>{geoErr}</div>}
+          {geoSource === 'gps'
+            ? <div className="onb-geo">
+                <span className="coords"><small>Standort erfasst</small>{lat}, {lng}</span>
+                <button className="onb-change" onClick={() => setGeoSource('manual')}>Ändern</button>
+              </div>
+            : <>
+                <button className="btn sec" onClick={useCurrentPosition} disabled={locating}>
+                  {locating ? 'Standort wird ermittelt...' : 'Meinen aktuellen Standort verwenden'}
+                </button>
+                <div className="onb-or">oder manuell eintragen</div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Breitengrad</label>
+                    <input type="number" step="0.00001" value={lat}
+                      onChange={e => { setLat(e.target.value); setGeoSource('manual'); }} placeholder="50.10082" />
+                  </div>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Längengrad</label>
+                    <input type="number" step="0.00001" value={lng}
+                      onChange={e => { setLng(e.target.value); setGeoSource('manual'); }} placeholder="8.76432" />
+                  </div>
+                </div>
+                <p className="onb-hint">
+                  Findest du die Koordinaten nicht? Suche deine Adresse bei{' '}
+                  <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">maps.google.com</a>,
+                  {' '}Rechtsklick auf den Punkt zeigt sie an.
+                </p>
+              </>}
         </div>
       </div>
     </div>
