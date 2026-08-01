@@ -610,7 +610,15 @@ function MerchantOnboarding() {
 
   const latNum = parseFloat(lat), lngNum = parseFloat(lng);
   const hasLocation = Number.isFinite(latNum) && Number.isFinite(lngNum) && (latNum !== 0 || lngNum !== 0);
-  const complete = name.trim() && short.trim() && categoryId && street.trim() && houseNumber !== '' && hasLocation;
+  const missing = [
+    [!name.trim(), 'Geschäftsname'],
+    [!short.trim(), 'Kurzform'],
+    [!categoryId, 'Kategorie'],
+    [!street.trim(), 'Straße'],
+    [houseNumber === '', 'Hausnummer'],
+    [!hasLocation, 'Standort']
+  ].filter(([m]) => m).map(([, label]) => label);
+  const complete = missing.length === 0;
 
   useEffect(() => { api('/api/categories').then(setCategories).catch(() => {}); }, []);
 
@@ -664,17 +672,17 @@ function MerchantOnboarding() {
         {err && <div className="err">{err}</div>}
         <div className="field">
           <label>Geschäftsname</label>
-          <input value={name} onChange={e => changeName(e.target.value)} placeholder="z.B. Café Sonntag" />
+          <input autoComplete="off" value={name} onChange={e => changeName(e.target.value)} placeholder="z.B. Café Sonntag" />
         </div>
         <div className="field">
           <label>Kurzform für Avatar (max. 2 Zeichen)</label>
-          <input value={short} maxLength={2}
+          <input autoComplete="off" value={short} maxLength={2}
             onChange={e => { setShortTouched(true); setShort(e.target.value.toUpperCase()); }}
             placeholder="CS" />
         </div>
         <div className="field">
           <label>Kategorie</label>
-          <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+          <select autoComplete="off" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
             <option value="">Bitte wählen</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
@@ -682,16 +690,16 @@ function MerchantOnboarding() {
         <div style={{ display: 'flex', gap: 10 }}>
           <div className="field" style={{ flex: 2 }}>
             <label>Straße</label>
-            <input value={street} onChange={e => setStreet(e.target.value)} placeholder="Kaiserstraße" />
+            <input autoComplete="off" value={street} onChange={e => setStreet(e.target.value)} placeholder="Kaiserstraße" />
           </div>
           <div className="field" style={{ flex: 1 }}>
             <label>Hausnummer</label>
-            <input type="number" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="14" />
+            <input autoComplete="off" type="number" value={houseNumber} onChange={e => setHouseNumber(e.target.value)} placeholder="14" />
           </div>
         </div>
         <div className="field">
           <label>Kurzbeschreibung (optional)</label>
-          <textarea value={description} maxLength={200} rows={3}
+          <textarea autoComplete="off" value={description} maxLength={200} rows={3}
             onChange={e => setDescription(e.target.value)}
             placeholder="Was macht dein Geschäft aus?"
             style={{ border: '1px solid var(--linie)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--body)', fontSize: 14, background: 'var(--weiss)', color: 'var(--ink)', outline: 0, resize: 'vertical' }} />
@@ -714,12 +722,12 @@ function MerchantOnboarding() {
                 <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
                   <div className="field" style={{ flex: 1 }}>
                     <label>Breitengrad</label>
-                    <input type="number" step="0.00001" value={lat}
+                    <input autoComplete="off" type="number" step="0.00001" value={lat}
                       onChange={e => { setLat(e.target.value); setGeoSource('manual'); }} placeholder="50.10082" />
                   </div>
                   <div className="field" style={{ flex: 1 }}>
                     <label>Längengrad</label>
-                    <input type="number" step="0.00001" value={lng}
+                    <input autoComplete="off" type="number" step="0.00001" value={lng}
                       onChange={e => { setLng(e.target.value); setGeoSource('manual'); }} placeholder="8.76432" />
                   </div>
                 </div>
@@ -734,7 +742,7 @@ function MerchantOnboarding() {
         <button className="btn" onClick={submit} disabled={!complete || saving} style={{ marginTop: 6 }}>
           {saving ? 'Wird angelegt...' : 'Geschäft anlegen'}
         </button>
-        {!complete && <div className="hint">Alle Pflichtfelder inkl. Standort ausfüllen.</div>}
+        {!complete && <div className="hint">Noch offen: {missing.join(', ')}</div>}
       </div>
     </div>
   );
