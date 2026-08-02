@@ -450,7 +450,11 @@ a{color:var(--emaille)}
 .admin-card small{display:block;margin-top:4px;font-size:12.5px;color:var(--grau);line-height:1.45}
 .admin-actions{display:flex;gap:8px;margin-top:12px}
 .admin-actions .btn{flex:1;padding:10px;font-size:13px}
-.admin-actions .btn.sec{flex:0 0 auto}
+.profile-email{padding:12px 14px;border-radius:var(--r-m);background:var(--papier);border:1px solid var(--linie);font-size:14px;color:var(--grau)}
+.profile-email strong{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
+.profile-section{margin:0 16px 20px}
+.profile-section h3{font-family:var(--display);font-size:20px;text-transform:uppercase;font-weight:400;margin-bottom:12px}
+.profile-preview{margin-top:16px;padding:14px;border-radius:var(--r-m);background:var(--papier);border:1px dashed var(--linie);font-size:13px;color:var(--ink-weich)}
 
 /* ─── Push-Banner ─────────────────────────────────────────────── */
 .push-banner{
@@ -1312,7 +1316,7 @@ function offerBucket(o) {
 }
 
 function MerchantDashboard() {
-  const { merchant } = useContext(AppCtx);
+  const { merchant, openProfile } = useContext(AppCtx);
   const [stats, setStats] = useState(null);
   const [voucherGroups, setVoucherGroups] = useState(null);
   const [view, setView] = useState('dash');
@@ -1332,7 +1336,8 @@ function MerchantDashboard() {
 
   const pending = merchant?.activation_status === 'pending';
   const rejected = merchant?.activation_status === 'rejected';
-  const shopUrl = merchant?.slug ? `${window.location.origin}/geschaeft/${merchant.slug}` : null;
+  const shopUrl = merchant?.slug && merchant.activation_status === 'active'
+    ? `${window.location.origin}/geschaeft/${merchant.slug}` : null;
 
   const createOffer = async () => {
     try {
@@ -1392,12 +1397,16 @@ function MerchantDashboard() {
         </div>
       )}
 
-      {shopUrl && merchant?.activation_status === 'active' && (
-        <div style={{ padding: '10px 16px 0' }}>
-          <button type="button" className="shop-link" onClick={() => window.open(shopUrl, '_blank')}>
-            Deine Geschäftsseite · /geschaeft/{merchant.slug}
-            <Icon name="chevronRight" size={16} />
+      {merchant && (
+        <div style={{ padding: '10px 16px 0', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <button type="button" className="shop-link" onClick={openProfile}>
+            <Icon name="sliders" size={16} /> Geschäft & Profil bearbeiten
           </button>
+          {shopUrl && (
+            <button type="button" className="shop-link" onClick={() => window.open(shopUrl, '_blank')}>
+              Öffentliche Seite <Icon name="chevronRight" size={16} />
+            </button>
+          )}
         </div>
       )}
 
@@ -1699,6 +1708,196 @@ function navigateShop(slug) {
   if (window.location.pathname !== path) window.history.pushState({ shop: slug || null }, '', path);
 }
 
+// ─── Profil / Einstellungen ─────────────────────────────────────────
+function ProfileScreen({ user, merchant, onClose, onSaved }) {
+  const [categories, setCategories] = useState([]);
+  const [accountName, setAccountName] = useState(user?.name || '');
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const [shop, setShop] = useState(() => merchant ? {
+    name: merchant.name || '',
+    short: merchant.short || '',
+    category_id: merchant.category_id || '',
+    street: merchant.street || '',
+    house_number: merchant.house_number ?? '',
+    address: merchant.address || '',
+    description: merchant.description || '',
+    lat: merchant.lat != null ? String(merchant.lat) : '',
+    lng: merchant.lng != null ? String(merchant.lng) : '',
+    slug: merchant.slug || ''
+  } : null);
+
+  useEffect(() => {
+    if (user?.role === 'merchant') api('/api/categories').then(setCategories).catch(() => {});
+  }, [user?.role]);
+
+  useEffect(() => { setAccountName(user?.name || ''); }, [user?.name]);
+
+  useEffect(() => {
+    if (!merchant) return;
+    setShop({
+      name: merchant.name || '',
+      short: merchant.short || '',
+      category_id: merchant.category_id || '',
+      street: merchant.street || '',
+      house_number: merchant.house_number ?? '',
+      address: merchant.address || '',
+      description: merchant.description || '',
+      lat: merchant.lat != null ? String(merchant.lat) : '',
+      lng: merchant.lng != null ? String(merchant.lng) : '',
+      slug: merchant.slug || ''
+    });
+  }, [merchant]);
+
+  const isMerchant = user?.role === 'merchant' && shop;
+  const latNum = parseFloat(shop?.lat), lngNum = parseFloat(shop?.lng);
+  const shopValid = !isMerchant || (
+    shop.name.trim() && shop.category_id && shop.street.trim() && shop.house_number !== '' &&
+    Number.isFinite(latNum) && Number.isFinite(lngNum)
+  );
+
+  const save = async () => {
+    setErr(''); setOk('');
+    if (newPw && !curPw) { setErr('Bitte aktuelles Passwort eingeben, um ein neues zu setzen.'); return; }
+    if (!accountName.trim()) { setErr('Name fehlt.'); return; }
+    if (!shopValid) { setErr('Bitte alle Pflichtfelder für dein Geschäft ausfüllen.'); return; }
+    setSaving(true);
+    try {
+      const body = { name: accountName.trim() };
+      if (newPw) { body.password = newPw; body.current_password = curPw; }
+      const userRes = await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
+      if (userRes.token) localStorage.setItem('nahdran_token', userRes.token);
+      let updatedMerchant = merchant;
+      if (isMerchant) {
+        updatedMerchant = await api('/api/merchant/profile', { method: 'PUT', body: JSON.stringify({
+          name: shop.name.trim(),
+          short: shop.short.trim(),
+          category_id: shop.category_id,
+          street: shop.street.trim(),
+          house_number: parseInt(shop.house_number, 10),
+          address: shop.address,
+          lat: latNum,
+          lng: lngNum,
+          description: shop.description,
+          slug: shop.slug.trim() || undefined
+        }) });
+      }
+      onSaved(userRes.user, updatedMerchant || null);
+      setCurPw(''); setNewPw('');
+      setOk('Gespeichert.');
+    } catch (e) { setErr(e.message); }
+    setSaving(false);
+  };
+
+  const shopPublicUrl = merchant?.slug && merchant.activation_status === 'active'
+    ? `${window.location.origin}/geschaeft/${merchant.slug}` : null;
+
+  return (
+    <div className="form-wrap" style={{ paddingTop: 8 }}>
+      <button type="button" className="shop-link" onClick={onClose} style={{ marginBottom: 8 }}>
+        <Icon name="arrowLeft" size={16} /> Zurück
+      </button>
+      <h3 style={{ marginBottom: 4 }}>Mein Profil</h3>
+      <p className="tip" style={{ marginBottom: 12 }}><Icon name="info" size={17} /><span>Die E-Mail-Adresse kann aus Sicherheitsgründen nicht geändert werden.</span></p>
+
+      {err && <div className="err"><Icon name="alert" size={17} /><span>{err}</span></div>}
+      {ok && <div className="scan-result ok" style={{ maxWidth: 'none' }}><Icon name="check" size={18} /><span>{ok}</span></div>}
+
+      <div className="profile-section">
+        <h3>Konto</h3>
+        <div className="field">
+          <label>E-Mail</label>
+          <div className="profile-email"><strong>{user.email}</strong><span>Nicht änderbar</span></div>
+        </div>
+        <div className="field">
+          <label>{user.role === 'merchant' ? 'Dein Anzeigename' : 'Name'}</label>
+          <input value={accountName} onChange={e => setAccountName(e.target.value)} placeholder="Wie du in der App heißt" />
+        </div>
+        <div className="field">
+          <label>Neues Passwort (optional)</label>
+          <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Mindestens 6 Zeichen" autoComplete="new-password" />
+        </div>
+        {newPw && (
+          <div className="field">
+            <label>Aktuelles Passwort</label>
+            <input type="password" value={curPw} onChange={e => setCurPw(e.target.value)} autoComplete="current-password" />
+          </div>
+        )}
+      </div>
+
+      {isMerchant && (
+        <div className="profile-section">
+          <h3>Dein Geschäft</h3>
+          <p className="tip" style={{ marginBottom: 10 }}><Icon name="store" size={17} /><span>Diese Angaben erscheinen auf deiner öffentlichen Geschäftsseite.</span></p>
+          <div className="field">
+            <label>Geschäftsname</label>
+            <input value={shop.name} onChange={e => setShop({ ...shop, name: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Kurzform (2 Zeichen)</label>
+            <input value={shop.short} maxLength={4} onChange={e => setShop({ ...shop, short: e.target.value.toUpperCase() })} />
+          </div>
+          <div className="field">
+            <label>Kategorie</label>
+            <select value={shop.category_id} onChange={e => setShop({ ...shop, category_id: e.target.value })}>
+              <option value="">Wählen…</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Straße & Hausnummer</label>
+            <div className="row">
+              <input style={{ flex: 2 }} value={shop.street} onChange={e => setShop({ ...shop, street: e.target.value })} placeholder="Kaiserstraße" />
+              <input style={{ flex: 1 }} type="number" value={shop.house_number} onChange={e => setShop({ ...shop, house_number: e.target.value })} placeholder="14" />
+            </div>
+          </div>
+          <div className="field">
+            <label>Adresszusatz (optional)</label>
+            <input value={shop.address} onChange={e => setShop({ ...shop, address: e.target.value })} placeholder="Hinterhof, 2. OG …" />
+          </div>
+          <div className="field">
+            <label>Beschreibung</label>
+            <textarea rows={4} maxLength={2000} value={shop.description} onChange={e => setShop({ ...shop, description: e.target.value })} placeholder="Was macht dein Geschäft aus?" />
+          </div>
+          <div className="field">
+            <label>URL-Pfad (Slug)</label>
+            <input value={shop.slug} onChange={e => setShop({ ...shop, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} placeholder="cafe-sonntag" />
+            <small style={{ color: 'var(--grau)', fontSize: 12 }}>Deine Seite: /geschaeft/{shop.slug || '…'}</small>
+          </div>
+          <div className="field">
+            <div className="row">
+              <div className="field" style={{ flex: 1 }}>
+                <label>Breitengrad</label>
+                <input type="number" step="0.00001" value={shop.lat} onChange={e => setShop({ ...shop, lat: e.target.value })} />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Längengrad</label>
+                <input type="number" step="0.00001" value={shop.lng} onChange={e => setShop({ ...shop, lng: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          {merchant?.activation_status === 'pending' && (
+            <div className="profile-preview">Vorschau: Nach Freigabe ist deine Seite unter <strong>/geschaeft/{shop.slug || merchant.slug}</strong> erreichbar.</div>
+          )}
+          {shopPublicUrl && (
+            <button type="button" className="shop-link" onClick={() => window.open(shopPublicUrl, '_blank')}>
+              Öffentliche Seite ansehen <Icon name="chevronRight" size={16} />
+            </button>
+          )}
+        </div>
+      )}
+
+      <button className="btn" onClick={save} disabled={saving || !shopValid}>
+        {saving ? 'Speichern…' : 'Änderungen speichern'}
+      </button>
+    </div>
+  );
+}
+
 // ─── Push Banner ────────────────────────────────────────────────────
 function PushBanner({ push, onTap }) {
   if (!push) return null;
@@ -1754,7 +1953,9 @@ function App() {
   const [push, setPush] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [shopSlug, setShopSlug] = useState(() => parseShopSlug());
+  const [profileOpen, setProfileOpen] = useState(false);
   const refresh = () => setRefreshKey(k => k + 1);
+  const openProfile = () => setProfileOpen(true);
 
   // restore session
   useEffect(() => {
@@ -1834,9 +2035,9 @@ function App() {
     setFeedData(fd => fd ? { ...fd, offers: fd.offers.map(o => o.id === offer.id ? { ...o, is_favourite: !o.is_favourite } : o) } : fd);
   };
 
-  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setMerchant(null); setFeedData(null); };
+  const logout = () => { localStorage.removeItem('nahdran_token'); setUser(null); setMerchant(null); setFeedData(null); setProfileOpen(false); };
 
-  const ctx = { user, setUser, merchant, setMerchant, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab };
+  const ctx = { user, setUser, merchant, setMerchant, geo, feedData, setFeedData, radius, setRadius, category, setCategory, openDeal, toggleFav, refresh, setTab, openProfile };
 
   if (!user) return <AppCtx.Provider value={ctx}><AuthScreen /></AppCtx.Provider>;
 
@@ -1862,21 +2063,24 @@ function App() {
         <header className="hdr">
           <div className="hdr-row">
             <div>
-              <div className="eyebrow">{isAdmin ? 'Administration' : isMerchant ? 'Händler-Dashboard' : 'Offenbach · Innenstadt'}</div>
-              <h1>{isAdmin ? 'Freigaben' : isMerchant ? user.name : shopSlug ? 'Geschäft' : 'Kaiserstraße'}</h1>
+              <div className="eyebrow">{profileOpen ? 'Einstellungen' : isAdmin ? 'Administration' : isMerchant ? 'Händler-Dashboard' : 'Offenbach · Innenstadt'}</div>
+              <h1>{profileOpen ? 'Mein Profil' : isAdmin ? 'Freigaben' : isMerchant ? user.name : shopSlug ? 'Geschäft' : 'Kaiserstraße'}</h1>
             </div>
             <div className="hdr-actions">
+              {!profileOpen && (
+                <button className="hdr-btn" onClick={openProfile} aria-label="Profil bearbeiten"><Icon name="user" size={18} /></button>
+              )}
               <button className="hdr-btn" onClick={logout} aria-label="Abmelden"><Icon name="logout" size={18} /></button>
             </div>
           </div>
 
-          {isAdmin
+          {!profileOpen && (isAdmin
             ? <div className="geo-pill live"><span className="dot" />Händler & Geschäfte freischalten</div>
             : isMerchant
             ? merchant && <div className="geo-pill live"><span className="dot" />{merchant.street} {merchant.house_number}</div>
-            : <div className={`geo-pill${gpsLive ? ' live' : ''}`}><span className="dot" />{statusText}</div>}
+            : <div className={`geo-pill${gpsLive ? ' live' : ''}`}><span className="dot" />{statusText}</div>)}
 
-          {!isMerchant && !isAdmin && !geoAsked && (
+          {!profileOpen && !isMerchant && !isAdmin && !geoAsked && (
             <button className="geo-cta" onClick={() => setGeoConsent(true)}>
               <Icon name="crosshair" size={20} />
               <span>
@@ -1889,7 +2093,14 @@ function App() {
         </header>
 
         <div className="main" key={refreshKey}>
-          {isAdmin
+          {profileOpen ? (
+            <ProfileScreen
+              user={user}
+              merchant={merchant}
+              onClose={() => setProfileOpen(false)}
+              onSaved={(u, m) => { setUser(u); if (m) setMerchant(m); }}
+            />
+          ) : isAdmin
             ? <AdminDashboard />
             : isMerchant
             ? (merchant ? <MerchantDashboard /> : <MerchantOnboarding />)
@@ -1903,7 +2114,7 @@ function App() {
               </>}
         </div>
 
-        {!isMerchant && !isAdmin && !shopSlug && (
+        {!profileOpen && !isMerchant && !isAdmin && !shopSlug && (
           <nav className="tabs">
             {tabs.map(t => (
               <button key={t.id} className={`tab${tab === t.id ? ' on' : ''}`} onClick={() => setTab(t.id)}
