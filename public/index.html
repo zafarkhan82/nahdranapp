@@ -431,6 +431,26 @@ a{color:var(--emaille)}
 .scan-result.ok{background:var(--gruen-weich);border:1px solid rgba(27,122,61,.35);color:#14602F}
 .scan-result.err{background:#FDECE7;border:1px solid #F3B7A2;color:#8C2C0B}
 .scan-result.dup{background:var(--gelb-weich);border:1px solid rgba(178,107,0,.35);color:#8A5300}
+.pending-banner{margin:12px 16px 0;padding:14px 16px;border-radius:var(--r-m);background:var(--gelb-weich);border:1px solid rgba(178,107,0,.35);display:flex;gap:12px;align-items:flex-start;font-size:13.5px;line-height:1.5;color:#5C3A00}
+.pending-banner strong{display:block;font-size:14px;margin-bottom:2px;color:var(--ink)}
+.m-subseg{display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap}
+.m-subseg button{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:7px 12px;border-radius:var(--r-pill);border:1px solid var(--linie);background:var(--weiss);color:var(--grau)}
+.m-subseg button.on{background:var(--emaille);border-color:var(--emaille);color:#fff}
+.vch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;background:var(--weiss);border:1px solid var(--linie);border-radius:var(--r-m);font-size:13px}
+.vch-row code{font-family:var(--mono);font-weight:600;letter-spacing:.12em}
+.shop-hero{margin:0 16px 14px;padding:18px;border-radius:var(--r-l);background:var(--weiss);border:1px solid var(--linie);box-shadow:var(--sh-1)}
+.shop-hero .init{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;font-family:var(--display);font-size:22px;color:#fff;margin-bottom:12px}
+.shop-hero h2{font-family:var(--display);font-size:24px;text-transform:uppercase;font-weight:400;line-height:1.05}
+.shop-hero .addr{margin-top:8px;font-size:14px;color:var(--ink-weich)}
+.shop-hero .desc{margin-top:10px;font-size:13.5px;color:var(--grau);line-height:1.55}
+.shop-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;font-weight:600;color:var(--emaille);background:none;border:none;padding:0}
+.admin-list{padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.admin-card{background:var(--weiss);border:1px solid var(--linie);border-radius:var(--r-m);padding:14px;box-shadow:var(--sh-1)}
+.admin-card h4{font-size:15px;font-weight:600}
+.admin-card small{display:block;margin-top:4px;font-size:12.5px;color:var(--grau);line-height:1.45}
+.admin-actions{display:flex;gap:8px;margin-top:12px}
+.admin-actions .btn{flex:1;padding:10px;font-size:13px}
+.admin-actions .btn.sec{flex:0 0 auto}
 
 /* ─── Push-Banner ─────────────────────────────────────────────── */
 .push-banner{
@@ -582,7 +602,12 @@ function AuthScreen() {
     setLoading(false);
   };
 
-  const fillDemo = (mail) => { setMode('login'); setEmail(mail); setPw('demo123'); setErr(''); };
+  const fillDemo = (mail) => {
+    setMode('login');
+    setEmail(mail);
+    setPw(mail === 'admin@50meter.de' ? 'admin50meter' : 'demo123');
+    setErr('');
+  };
 
   return (
     <div className="auth-page">
@@ -656,6 +681,9 @@ function AuthScreen() {
             <button className="demo-btn" onClick={() => fillDemo('cafe@demo.de')}>
               <strong>Demo: Händler</strong><small>cafe@demo.de</small>
             </button>
+            <button className="demo-btn" onClick={() => fillDemo('admin@50meter.de')}>
+              <strong>Demo: Admin</strong><small>admin@50meter.de</small>
+            </button>
           </div>
         )}
 
@@ -685,7 +713,9 @@ function DealCard({ offer, onOpen, onFav }) {
       <span className="c-body">
         <span className="c-top"><span className="c-cat">{offer.category_label}</span></span>
         <h3>{offer.title}</h3>
-        <span className="c-shop">{offer.merchant_name} · Nr. {offer.house_number || '–'}</span>
+        <span className="c-shop" onClick={e => { if (offer.merchant_slug) { e.stopPropagation(); window.dispatchEvent(new CustomEvent('nahdran:shop', { detail: offer.merchant_slug })); } }}>
+          {offer.merchant_name} · Nr. {offer.house_number || '–'}
+        </span>
         <span className="c-meta">
           <span className="pillet"><Icon name="pin" size={13} />{dist(offer.distance)}</span>
           <span className={`pillet${tl.urgent ? ' urgent' : ''}`}><Icon name="clock" size={13} />{tl.text}</span>
@@ -752,7 +782,14 @@ function DealSheet({ offerId, onClose }) {
           </div>
 
           <div className="d-body">
-            <div className="d-shop">{o.merchant_name} · {o.street} {o.house_number || '–'}</div>
+            <div className="d-shop">
+              {o.merchant_slug
+                ? <button type="button" className="shop-link" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent('nahdran:shop', { detail: o.merchant_slug })); }}>
+                    {o.merchant_name} · {o.street} {o.house_number || '–'}
+                    <Icon name="chevronRight" size={16} />
+                  </button>
+                : <>{o.merchant_name} · {o.street} {o.house_number || '–'}</>}
+            </div>
             <h2>{o.title}</h2>
 
             <div className="price-box">
@@ -1266,15 +1303,36 @@ function MerchantOnboarding() {
 }
 
 // ─── Merchant Dashboard ─────────────────────────────────────────────
+function offerBucket(o) {
+  const ended = o.status === 'expired' || new Date(o.ends_at) <= new Date();
+  if (ended) return 'past';
+  if (o.status === 'paused') return 'available';
+  if (o.status === 'active') return 'active';
+  return 'past';
+}
+
 function MerchantDashboard() {
+  const { merchant } = useContext(AppCtx);
   const [stats, setStats] = useState(null);
-  const [view, setView] = useState('dash'); // dash, create, scan
+  const [voucherGroups, setVoucherGroups] = useState(null);
+  const [view, setView] = useState('dash');
+  const [offerFilter, setOfferFilter] = useState('active');
+  const [voucherFilter, setVoucherFilter] = useState('active');
   const [scanCode, setScanCode] = useState('');
   const [scanResult, setScanResult] = useState(null);
   const [form, setForm] = useState({ title: '', price_before: '', price_after: '', quota_total: 20, duration_hours: 4, terms: '' });
 
-  const load = async () => { try { setStats(await api('/api/merchant/stats')); } catch {} };
+  const load = async () => {
+    try {
+      setStats(await api('/api/merchant/stats'));
+      setVoucherGroups(await api('/api/merchant/vouchers'));
+    } catch {}
+  };
   useEffect(() => { load(); }, []);
+
+  const pending = merchant?.activation_status === 'pending';
+  const rejected = merchant?.activation_status === 'rejected';
+  const shopUrl = merchant?.slug ? `${window.location.origin}/geschaeft/${merchant.slug}` : null;
 
   const createOffer = async () => {
     try {
@@ -1308,13 +1366,46 @@ function MerchantDashboard() {
 
   if (!stats) return <CardSkeletons n={3} />;
 
+  const offerFilters = [
+    { id: 'active', label: 'Aktiv' },
+    { id: 'past', label: 'Vergangen' },
+    { id: 'available', label: 'Verfügbar' }
+  ];
+  const vchFilters = [
+    { id: 'active', label: 'Aktiv' },
+    { id: 'redeemed', label: 'Eingelöst' },
+    { id: 'expired', label: 'Abgelaufen' }
+  ];
+  const vchList = voucherGroups ? (voucherGroups[voucherFilter] || []) : [];
+
   return (
     <>
+      {(pending || rejected) && (
+        <div className="pending-banner">
+          <Icon name="info" size={22} />
+          <div>
+            <strong>{rejected ? 'Freigabe abgelehnt' : 'Freigabe ausstehend'}</strong>
+            {rejected
+              ? 'Dein Geschäft wurde nicht freigeschaltet. Bitte wende dich an info@50meter.de.'
+              : 'Dein Geschäft wird vom Betreiber geprüft. Bis zur Freigabe sind Angebote nicht öffentlich sichtbar.'}
+          </div>
+        </div>
+      )}
+
+      {shopUrl && merchant?.activation_status === 'active' && (
+        <div style={{ padding: '10px 16px 0' }}>
+          <button type="button" className="shop-link" onClick={() => window.open(shopUrl, '_blank')}>
+            Deine Geschäftsseite · /geschaeft/{merchant.slug}
+            <Icon name="chevronRight" size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="m-seg">
         <div className="seg" role="group" aria-label="Bereich wählen">
           <button className={view === 'dash' ? 'on' : ''} onClick={() => setView('dash')}><Icon name="chart" size={16} />Übersicht</button>
           <button className={view === 'scan' ? 'on' : ''} onClick={() => setView('scan')}><Icon name="scan" size={16} />Scanner</button>
-          <button className={view === 'create' ? 'on' : ''} onClick={() => setView('create')}><Icon name="plus" size={16} />Angebot</button>
+          <button className={view === 'create' ? 'on' : ''} onClick={() => setView('create')} disabled={pending || rejected}><Icon name="plus" size={16} />Angebot</button>
         </div>
       </div>
 
@@ -1326,8 +1417,30 @@ function MerchantDashboard() {
             <div className="m-stat hot"><b>{stats.totalRedeemed}</b><span>Eingelöst</span></div>
             <div className="m-stat hot"><b>{stats.redemptionRate}%</b><span>Quote</span></div>
           </div>
-          <div className="section-title">Meine Angebote</div>
-          <MerchantOffers merchantId={stats.merchant.id} onToggle={toggleOffer} onCreate={() => setView('create')} />
+          <div className="section-title">Angebote</div>
+          <div className="m-subseg" role="tablist">
+            {offerFilters.map(f => (
+              <button key={f.id} type="button" className={offerFilter === f.id ? 'on' : ''} onClick={() => setOfferFilter(f.id)}>{f.label}</button>
+            ))}
+          </div>
+          <MerchantOffers filter={offerFilter} onToggle={toggleOffer} onCreate={() => setView('create')} bucketFn={offerBucket} />
+
+          <div className="section-title" style={{ marginTop: 8 }}>Gutscheine</div>
+          <div className="m-subseg" role="tablist">
+            {vchFilters.map(f => (
+              <button key={f.id} type="button" className={voucherFilter === f.id ? 'on' : ''} onClick={() => setVoucherFilter(f.id)}>{f.label}</button>
+            ))}
+          </div>
+          <div className="m-offers">
+            {!voucherGroups ? <CardSkeletons n={1} /> : vchList.length === 0 ? (
+              <p style={{ padding: '4px 0', fontSize: 13.5, color: 'var(--grau)' }}>Keine Gutscheine in dieser Kategorie.</p>
+            ) : vchList.map(v => (
+              <div className="vch-row" key={v.id}>
+                <span><strong>{v.title}</strong><br /><small style={{ color: 'var(--grau)' }}>{new Date(v.reserved_at).toLocaleString('de-DE')}</small></span>
+                <code>{v.code}</code>
+              </div>
+            ))}
+          </div>
         </>
       )}
 
@@ -1397,36 +1510,193 @@ function MerchantDashboard() {
   );
 }
 
-function MerchantOffers({ merchantId, onToggle, onCreate }) {
+function MerchantOffers({ filter, onToggle, onCreate, bucketFn }) {
   const [offers, setOffers] = useState([]);
   useEffect(() => { api('/api/merchant/offers').then(d => setOffers(d.offers)).catch(() => {}); }, []);
+
+  const filtered = offers.filter(o => bucketFn(o) === filter);
+  const list = filtered;
 
   if (!offers.length) return (
     <div className="empty">
       <div className="empty-ic"><Icon name="tag" size={28} /></div>
       <h3>Keine Angebote</h3>
-      <p>Leg dein erstes Angebot an — es erscheint sofort im Feed der Nachbarschaft.</p>
+      <p>Leg dein erstes Angebot an — nach Freigabe erscheint es im Feed der Nachbarschaft.</p>
       <button className="btn" style={{ maxWidth: 240 }} onClick={onCreate}><Icon name="plus" size={18} />Angebot anlegen</button>
     </div>
   );
+  if (!list.length) return (
+    <p className="m-offers" style={{ fontSize: 13.5, color: 'var(--grau)' }}>Keine Angebote in dieser Kategorie.</p>
+  );
   return (
     <div className="m-offers">
-      {offers.map(o => {
+      {list.map(o => {
         const tl = timeLeft(o.ends_at);
+        const bucket = bucketFn(o);
         return (
           <div className="m-offer" key={o.id}>
             <div className="txt">
               <h4>{o.title}</h4>
-              <small>{o.quota_reserved}/{o.quota_total} gesichert · {tl.text}</small>
+              <small>{o.quota_reserved}/{o.quota_total} gesichert · {bucket === 'past' ? 'beendet' : tl.text}</small>
             </div>
-            <button className={`st ${o.status}`} onClick={() => onToggle(o.id)}>
-              {o.status === 'active' ? 'Aktiv' : o.status === 'paused' ? 'Pausiert' : 'Abgelaufen'}
-            </button>
+            {bucket !== 'past' && (
+              <button className={`st ${o.status}`} onClick={() => onToggle(o.id)}>
+                {o.status === 'active' ? 'Aktiv' : o.status === 'paused' ? 'Pausiert' : 'Abgelaufen'}
+              </button>
+            )}
           </div>
         );
       })}
     </div>
   );
+}
+
+// ─── Admin ──────────────────────────────────────────────────────────
+function AdminDashboard() {
+  const [tab, setTab] = useState('pending');
+  const [merchants, setMerchants] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const d = await api(`/api/admin/merchants?status=${tab}`);
+      setMerchants(d.merchants || []);
+    } catch (e) { alert(e.message); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, [tab]);
+
+  const act = async (id, action) => {
+    await api(`/api/admin/merchants/${id}/${action}`, { method: 'POST' });
+    load();
+  };
+
+  const tabs = [
+    { id: 'pending', label: 'Neu' },
+    { id: 'active', label: 'Aktiv' },
+    { id: 'rejected', label: 'Abgelehnt' }
+  ];
+
+  return (
+    <>
+      <div className="m-seg">
+        <div className="seg" role="group">
+          {tabs.map(t => (
+            <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+      {loading ? <CardSkeletons n={3} /> : (
+        <div className="admin-list">
+          {merchants.length === 0 ? (
+            <div className="empty"><p>Keine Einträge.</p></div>
+          ) : merchants.map(m => (
+            <div className="admin-card" key={m.id}>
+              <h4>{m.name}</h4>
+              <small>{m.owner_name} · {m.owner_email}<br />
+                {m.street} {m.house_number} · {m.category_label}<br />
+                Slug: /geschaeft/{m.slug}</small>
+              {tab === 'pending' && (
+                <div className="admin-actions">
+                  <button className="btn" onClick={() => act(m.id, 'activate')}><Icon name="check" size={16} />Freischalten</button>
+                  <button className="btn sec" onClick={() => act(m.id, 'reject')}>Ablehnen</button>
+                </div>
+              )}
+              {tab === 'active' && m.slug && (
+                <button type="button" className="shop-link" style={{ marginTop: 10 }} onClick={() => window.open(`/geschaeft/${m.slug}`, '_blank')}>
+                  Geschäftsseite öffnen <Icon name="chevronRight" size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Shop (öffentliche Seite) ───────────────────────────────────────
+function ShopScreen({ slug, onBack, onOpenDeal }) {
+  const { geo, toggleFav, refresh } = useContext(AppCtx);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    if (!slug) return;
+    api(`/api/shops/${encodeURIComponent(slug)}`).then(setData).catch(() => setData({ error: true }));
+  }, [slug]);
+
+  if (!data) return <CardSkeletons n={2} />;
+  if (data.error) return (
+    <div className="empty">
+      <h3>Geschäft nicht gefunden</h3>
+      <button className="btn sec" onClick={onBack}>Zurück</button>
+    </div>
+  );
+
+  const m = data.merchant;
+  const distM = Math.round(haversineJS(geo.lat, geo.lng, m.lat, m.lng));
+
+  const toggleFavShop = async () => {
+    if (m.is_favourite) await api(`/api/favourites/${m.id}`, { method: 'DELETE' });
+    else await api('/api/favourites', { method: 'POST', body: JSON.stringify({ merchantId: m.id }) });
+    refresh();
+    setData(d => ({ ...d, merchant: { ...d.merchant, is_favourite: !d.merchant.is_favourite } }));
+  };
+
+  return (
+    <div style={{ paddingBottom: 24 }}>
+      <div style={{ padding: '12px 16px 0' }}>
+        <button type="button" className="shop-link" onClick={onBack}><Icon name="chevronRight" size={16} style={{ transform: 'rotate(180deg)' }} />Zurück</button>
+      </div>
+      <div className="shop-hero">
+        <div className="init" style={{ background: catGrad(m.category_color) }}>{m.short}</div>
+        <span className="c-cat">{m.category_label}</span>
+        <h2>{m.name}</h2>
+        <div className="addr">{m.street} {m.house_number || '–'}{m.address ? ` · ${m.address}` : ''}</div>
+        <div className="addr" style={{ marginTop: 4 }}><Icon name="pin" size={14} /> {dist(distM)} entfernt</div>
+        {m.description && <p className="desc">{m.description}</p>}
+        <button type="button" className={`fav-btn${m.is_favourite ? ' on' : ''}`} style={{ position: 'static', marginTop: 12 }} onClick={toggleFavShop}>
+          <Icon name="heart" size={17} fill={m.is_favourite ? 'currentColor' : 'none'} /> Favorit
+        </button>
+      </div>
+      <div className="section-title">Aktuelle Angebote</div>
+      {data.offers.length === 0 ? (
+        <p style={{ padding: '0 16px', color: 'var(--grau)', fontSize: 13.5 }}>Gerade keine laufenden Aktionen.</p>
+      ) : (
+        <div className="feed" style={{ paddingTop: 0 }}>
+          {data.offers.map(o => (
+            <DealCard key={o.id} offer={{
+              ...o, merchant_name: m.name, merchant_short: m.short, merchant_slug: m.slug,
+              category_label: m.category_label, category_color: m.category_color,
+              house_number: m.house_number, street: m.street, distance: distM,
+              is_favourite: m.is_favourite
+            }} onOpen={onOpenDeal} onFav={() => toggleFavShop()} />
+          ))}
+        </div>
+      )}
+      {data.pastOffers?.length > 0 && (
+        <>
+          <div className="section-title">Frühere Aktionen</div>
+          <div className="m-offers">
+            {data.pastOffers.map(o => (
+              <div className="m-offer" key={o.id}><div className="txt"><h4>{o.title}</h4><small>beendet</small></div></div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function parseShopSlug() {
+  const m = window.location.pathname.match(/^\/geschaeft\/([^/]+)\/?$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function navigateShop(slug) {
+  const path = slug ? `/geschaeft/${encodeURIComponent(slug)}` : '/';
+  if (window.location.pathname !== path) window.history.pushState({ shop: slug || null }, '', path);
 }
 
 // ─── Push Banner ────────────────────────────────────────────────────
@@ -1483,6 +1753,7 @@ function App() {
   const [detailId, setDetailId] = useState(null);
   const [push, setPush] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [shopSlug, setShopSlug] = useState(() => parseShopSlug());
   const refresh = () => setRefreshKey(k => k + 1);
 
   // restore session
@@ -1492,6 +1763,24 @@ function App() {
         .catch(() => localStorage.removeItem('nahdran_token'));
     }
   }, []);
+
+  useEffect(() => {
+    const onPop = () => setShopSlug(parseShopSlug());
+    const onShop = (e) => {
+      const slug = e.detail;
+      setShopSlug(slug);
+      navigateShop(slug);
+      setDetailId(null);
+    };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('nahdran:shop', onShop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('nahdran:shop', onShop);
+    };
+  }, []);
+
+  const closeShop = () => { setShopSlug(null); navigateShop(null); };
 
   // geo — eigener Einwilligungsschritt vor dem nativen Browser-Dialog
   const requestGeo = () => {
@@ -1551,6 +1840,7 @@ function App() {
 
   if (!user) return <AppCtx.Provider value={ctx}><AuthScreen /></AppCtx.Provider>;
 
+  const isAdmin = user.role === 'admin';
   const isMerchant = user.role === 'merchant';
   const gpsLive = geo.source === 'gps';
   const statusText = gpsLive
@@ -1572,19 +1862,21 @@ function App() {
         <header className="hdr">
           <div className="hdr-row">
             <div>
-              <div className="eyebrow">{isMerchant ? 'Händler-Dashboard' : 'Offenbach · Innenstadt'}</div>
-              <h1>{isMerchant ? user.name : 'Kaiserstraße'}</h1>
+              <div className="eyebrow">{isAdmin ? 'Administration' : isMerchant ? 'Händler-Dashboard' : 'Offenbach · Innenstadt'}</div>
+              <h1>{isAdmin ? 'Freigaben' : isMerchant ? user.name : shopSlug ? 'Geschäft' : 'Kaiserstraße'}</h1>
             </div>
             <div className="hdr-actions">
               <button className="hdr-btn" onClick={logout} aria-label="Abmelden"><Icon name="logout" size={18} /></button>
             </div>
           </div>
 
-          {isMerchant
+          {isAdmin
+            ? <div className="geo-pill live"><span className="dot" />Händler & Geschäfte freischalten</div>
+            : isMerchant
             ? merchant && <div className="geo-pill live"><span className="dot" />{merchant.street} {merchant.house_number}</div>
             : <div className={`geo-pill${gpsLive ? ' live' : ''}`}><span className="dot" />{statusText}</div>}
 
-          {!isMerchant && !geoAsked && (
+          {!isMerchant && !isAdmin && !geoAsked && (
             <button className="geo-cta" onClick={() => setGeoConsent(true)}>
               <Icon name="crosshair" size={20} />
               <span>
@@ -1597,8 +1889,12 @@ function App() {
         </header>
 
         <div className="main" key={refreshKey}>
-          {isMerchant
+          {isAdmin
+            ? <AdminDashboard />
+            : isMerchant
             ? (merchant ? <MerchantDashboard /> : <MerchantOnboarding />)
+            : shopSlug
+            ? <ShopScreen slug={shopSlug} onBack={closeShop} onOpenDeal={openDeal} />
             : <>
                 {tab === 'naehe' && <FeedScreen />}
                 {tab === 'suche' && <SearchScreen />}
@@ -1607,7 +1903,7 @@ function App() {
               </>}
         </div>
 
-        {!isMerchant && (
+        {!isMerchant && !isAdmin && !shopSlug && (
           <nav className="tabs">
             {tabs.map(t => (
               <button key={t.id} className={`tab${tab === t.id ? ' on' : ''}`} onClick={() => setTab(t.id)}
