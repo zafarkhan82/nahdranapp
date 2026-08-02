@@ -455,6 +455,8 @@ a{color:var(--emaille)}
 .profile-section{margin:0 16px 20px}
 .profile-section h3{font-family:var(--display);font-size:20px;text-transform:uppercase;font-weight:400;margin-bottom:12px}
 .profile-preview{margin-top:16px;padding:14px;border-radius:var(--r-m);background:var(--papier);border:1px dashed var(--linie);font-size:13px;color:var(--ink-weich)}
+.shop-sheet.sheet{max-height:min(94vh,900px);display:flex;flex-direction:column;padding:0}
+.shop-sheet .sheet-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
 /* ─── Push-Banner ─────────────────────────────────────────────── */
 .push-banner{
@@ -498,6 +500,14 @@ const api = async (path, opts = {}) => {
 
 // ─── Context ────────────────────────────────────────────────────────
 const AppCtx = createContext();
+
+function goConsumerHome(setters) {
+  const { setTab, setShopSlug, setProfileOpen } = setters;
+  setTab('naehe');
+  setShopSlug(null);
+  setProfileOpen(false);
+  navigateShop(null);
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────
 const euro = v => parseFloat(v).toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
@@ -602,6 +612,7 @@ function AuthScreen() {
         setMerchant(me.merchant || null);
       }
       setUser(data.user);
+      if (data.user.role === 'consumer') window.dispatchEvent(new CustomEvent('nahdran:home'));
     } catch (e) { setErr(e.message); }
     setLoading(false);
   };
@@ -1966,20 +1977,36 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const onPop = () => setShopSlug(parseShopSlug());
+    const onPop = () => {
+      const slug = parseShopSlug();
+      setShopSlug(slug);
+      if (!slug && user?.role === 'consumer') setTab('naehe');
+    };
     const onShop = (e) => {
       const slug = e.detail;
       setShopSlug(slug);
       navigateShop(slug);
       setDetailId(null);
+      setTab('naehe');
     };
+    const onHome = () => goConsumerHome({ setTab, setShopSlug, setProfileOpen });
     window.addEventListener('popstate', onPop);
     window.addEventListener('nahdran:shop', onShop);
+    window.addEventListener('nahdran:home', onHome);
     return () => {
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('nahdran:shop', onShop);
+      window.removeEventListener('nahdran:home', onHome);
     };
-  }, []);
+  }, [user?.role]);
+
+  // Kunden: Start immer Angebotsliste; Shop nur als Overlay (URL /geschaeft/… öffnet Overlay)
+  useEffect(() => {
+    if (!user || user.role !== 'consumer') return;
+    const slug = parseShopSlug();
+    if (slug) setShopSlug(slug);
+    setTab('naehe');
+  }, [user?.id, user?.role]);
 
   const closeShop = () => { setShopSlug(null); navigateShop(null); };
 
@@ -2055,6 +2082,11 @@ function App() {
     { id: 'gutscheine', label: 'Gutscheine', icon: 'ticket' }
   ];
 
+  const consumerTitles = { naehe: 'Kaiserstraße', suche: 'Suche', favoriten: 'Favoriten', gutscheine: 'Gutscheine' };
+  const consumerHeadline = !isAdmin && !isMerchant && !profileOpen
+    ? (consumerTitles[tab] || 'In deiner Nähe')
+    : null;
+
   return (
     <AppCtx.Provider value={ctx}>
       <div className="app">
@@ -2063,8 +2095,8 @@ function App() {
         <header className="hdr">
           <div className="hdr-row">
             <div>
-              <div className="eyebrow">{profileOpen ? 'Einstellungen' : isAdmin ? 'Administration' : isMerchant ? 'Händler-Dashboard' : 'Offenbach · Innenstadt'}</div>
-              <h1>{profileOpen ? 'Mein Profil' : isAdmin ? 'Freigaben' : isMerchant ? user.name : shopSlug ? 'Geschäft' : 'Kaiserstraße'}</h1>
+              <div className="eyebrow">{profileOpen ? 'Einstellungen' : isAdmin ? 'Administration' : isMerchant ? 'Händler-Dashboard' : tab === 'naehe' ? 'Angebote in der Nähe' : 'Offenbach · Innenstadt'}</div>
+              <h1>{profileOpen ? 'Mein Profil' : isAdmin ? 'Freigaben' : isMerchant ? user.name : (consumerHeadline || 'Kaiserstraße')}</h1>
             </div>
             <div className="hdr-actions">
               {!profileOpen && (
@@ -2104,8 +2136,6 @@ function App() {
             ? <AdminDashboard />
             : isMerchant
             ? (merchant ? <MerchantDashboard /> : <MerchantOnboarding />)
-            : shopSlug
-            ? <ShopScreen slug={shopSlug} onBack={closeShop} onOpenDeal={openDeal} />
             : <>
                 {tab === 'naehe' && <FeedScreen />}
                 {tab === 'suche' && <SearchScreen />}
@@ -2114,10 +2144,11 @@ function App() {
               </>}
         </div>
 
-        {!profileOpen && !isMerchant && !isAdmin && !shopSlug && (
+        {!profileOpen && !isMerchant && !isAdmin && (
           <nav className="tabs">
             {tabs.map(t => (
-              <button key={t.id} className={`tab${tab === t.id ? ' on' : ''}`} onClick={() => setTab(t.id)}
+              <button key={t.id} className={`tab${tab === t.id ? ' on' : ''}`}
+                onClick={() => { setTab(t.id); if (shopSlug) closeShop(); }}
                 aria-current={tab === t.id ? 'page' : undefined}>
                 <span className="tab-ic">
                   <Icon name={t.icon} size={19} fill={t.id === 'favoriten' && tab === t.id ? 'currentColor' : 'none'} />
@@ -2131,6 +2162,16 @@ function App() {
         {geoConsent && <GeoConsentSheet
           onAccept={requestGeo}
           onDecline={() => { setGeoConsent(false); setGeoAsked(true); }} />}
+
+        {shopSlug && !isMerchant && !isAdmin && !profileOpen && (
+          <div className="overlay" onClick={e => e.target === e.currentTarget && closeShop()}>
+            <div className="sheet shop-sheet" role="dialog" aria-modal="true" aria-label="Geschäft">
+              <div className="sheet-scroll">
+                <ShopScreen slug={shopSlug} onBack={closeShop} onOpenDeal={openDeal} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {detailId && <DealSheet offerId={detailId} onClose={closeDeal} />}
       </div>
