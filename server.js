@@ -162,8 +162,8 @@ function eur(c) { return (c / 100).toFixed(2); }
 
 // expire old offers
 function expireOffers() {
-  db.prepare(`UPDATE offers SET status = 'expired' WHERE status = 'active' AND ends_at < datetime('now')`).run();
-  db.prepare(`UPDATE vouchers SET status = 'expired' WHERE status = 'active' AND expires_at < datetime('now')`).run();
+  db.prepare(`UPDATE offers SET status = 'expired' WHERE status = 'active' AND datetime(ends_at) < datetime('now')`).run();
+  db.prepare(`UPDATE vouchers SET status = 'expired' WHERE status = 'active' AND datetime(expires_at) < datetime('now')`).run();
 }
 setInterval(expireOffers, 30000);
 
@@ -225,7 +225,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
     JOIN merchants m ON m.id = o.merchant_id
     JOIN categories c ON c.id = m.category_id
     WHERE o.status = 'active'
-      AND o.ends_at > datetime('now')
+      AND datetime(o.ends_at) > datetime('now')
       AND o.quota_reserved < o.quota_total
     ORDER BY o.created_at DESC
   `).all();
@@ -257,7 +257,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
   const unfilteredOffers = db.prepare(`
     SELECT m.category_id, m.lat as mlat, m.lng as mlng
     FROM offers o JOIN merchants m ON m.id = o.merchant_id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now') AND o.quota_reserved < o.quota_total
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
   `).all();
   unfilteredOffers.forEach(o => {
     if (haversine(lat, lng, o.mlat, o.mlng) <= radius) {
@@ -317,7 +317,7 @@ app.get('/api/search', (req, res) => {
     FROM offers o
     JOIN merchants m ON m.id = o.merchant_id
     JOIN categories c ON c.id = m.category_id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now')
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now')
       AND (m.name LIKE ? OR o.title LIKE ? OR c.label LIKE ?)
     ORDER BY o.created_at DESC
   `).all(like, like, like);
@@ -347,7 +347,7 @@ app.get('/api/streets', (req, res) => {
   merchants.forEach(m => {
     m.current_offer = db.prepare(`
       SELECT id, title, ends_at FROM offers
-      WHERE merchant_id = ? AND status = 'active' AND ends_at > datetime('now') AND quota_reserved < quota_total
+      WHERE merchant_id = ? AND status = 'active' AND datetime(ends_at) > datetime('now') AND quota_reserved < quota_total
       ORDER BY created_at DESC LIMIT 1
     `).get(m.id) || null;
   });
@@ -419,7 +419,7 @@ app.get('/api/favourites', auth, (req, res) => {
   favs.forEach(f => {
     f.current_offer = db.prepare(`
       SELECT id, title, ends_at FROM offers
-      WHERE merchant_id = ? AND status = 'active' AND ends_at > datetime('now') AND quota_reserved < quota_total
+      WHERE merchant_id = ? AND status = 'active' AND datetime(ends_at) > datetime('now') AND quota_reserved < quota_total
       ORDER BY created_at DESC LIMIT 1
     `).get(f.merchant_id) || null;
   });
@@ -484,7 +484,7 @@ app.get('/api/geofences', auth, (req, res) => {
     SELECT DISTINCT m.id, m.name, m.lat, m.lng, m.category_id
     FROM merchants m
     JOIN offers o ON o.merchant_id = m.id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now') AND o.quota_reserved < o.quota_total
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
   `).all();
 
   merchants = merchants.map(m => ({
@@ -522,7 +522,7 @@ app.post('/api/push/simulate', auth, (req, res) => {
   let offers = db.prepare(`
     SELECT o.id, o.title, o.ends_at, m.name as merchant_name, m.lat, m.lng, m.id as merchant_id
     FROM offers o JOIN merchants m ON m.id = o.merchant_id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now') AND o.quota_reserved < o.quota_total
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
   `).all();
 
   offers = offers.map(o => ({ ...o, distance: Math.round(haversine(userLat, userLng, o.lat, o.lng)) }))
@@ -636,7 +636,7 @@ app.get('/api/merchant/stats', merchantAuth, (req, res) => {
   const merchant = db.prepare('SELECT * FROM merchants WHERE user_id = ?').get(req.user.id);
   if (!merchant) return res.status(404).json({ error: 'Kein Geschäft zugeordnet' });
 
-  const activeOffers = db.prepare("SELECT COUNT(*) as n FROM offers WHERE merchant_id = ? AND status = 'active' AND ends_at > datetime('now')").get(merchant.id).n;
+  const activeOffers = db.prepare("SELECT COUNT(*) as n FROM offers WHERE merchant_id = ? AND status = 'active' AND datetime(ends_at) > datetime('now')").get(merchant.id).n;
   const totalReserved = db.prepare("SELECT COALESCE(SUM(quota_reserved),0) as n FROM offers WHERE merchant_id = ?").get(merchant.id).n;
   const totalRedeemed = db.prepare("SELECT COUNT(*) as n FROM vouchers v JOIN offers o ON o.id = v.offer_id WHERE o.merchant_id = ? AND v.status = 'redeemed'").get(merchant.id).n;
   const totalExpired = db.prepare("SELECT COUNT(*) as n FROM vouchers v JOIN offers o ON o.id = v.offer_id WHERE o.merchant_id = ? AND v.status = 'expired'").get(merchant.id).n;
@@ -701,29 +701,51 @@ function legalPage(title, body) {
 <title>${title} · NAHDRAN</title>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Fira+Sans:wght@400;500;600;700&family=Fira+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--emaille:#1B3A93;--ink:#12161A;--pflaster:#EAE8E1;--weiss:#FFF;--signal:#FF4A0F;--grau:#7A766E;--linie:#D6D3CA;--display:"Anton",sans-serif;--body:"Fira Sans",system-ui,sans-serif;--mono:"Fira Mono",monospace}
+:root{
+  --emaille:#1B3A93;--ink:#12161A;--pflaster:#EAE8E1;--weiss:#FFF;--signal:#FF4A0F;--grau:#7A766E;--linie:#D6D3CA;
+  --emaille-tief:#122A6E;--emaille-hell:#2E58CC;--papier:#F5F3ED;--ink-weich:#3A4048;
+  --grad-emaille:linear-gradient(135deg,var(--emaille-tief) 0%,var(--emaille) 48%,var(--emaille-hell) 100%);
+  --display:"Anton",sans-serif;--body:"Fira Sans",system-ui,sans-serif;--mono:"Fira Mono",monospace;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--body);color:var(--ink);background:var(--pflaster);line-height:1.6}
-.wrap{max-width:680px;margin:0 auto;padding:18px 18px 60px}
-.back{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--emaille);margin-bottom:22px}
-h1{font-family:var(--display);font-size:32px;text-transform:uppercase;font-weight:400;line-height:1.05;margin-bottom:6px}
-.sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);margin-bottom:24px}
-h2{font-size:16px;font-weight:600;margin:26px 0 6px}
-p,li{font-size:15px}
-ul{padding-left:20px;margin-top:4px}
-li{margin-top:3px}
-address{font-style:normal;font-size:15px}
-a{color:var(--emaille)}
-.stand{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grau);margin-top:30px;border-top:1px solid var(--linie);padding-top:12px}
+body{font-family:var(--body);color:var(--ink);background:var(--pflaster);line-height:1.65;-webkit-font-smoothing:antialiased}
+.hero{position:relative;background:var(--grad-emaille);color:#fff;overflow:hidden;padding:calc(20px + env(safe-area-inset-top)) 0 30px}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.26),rgba(255,255,255,0) 55%)}
+.hero::after{content:"";position:absolute;right:-70px;top:-110px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.16),rgba(255,255,255,0) 70%)}
+.hero .wrap{position:relative;z-index:1}
+.wrap{max-width:680px;margin:0 auto;padding:0 20px}
+.back{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.85);text-decoration:none;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.13);border-radius:999px;padding:7px 13px}
+.back:hover{background:rgba(255,255,255,.24)}
+h1{font-family:var(--display);font-size:34px;text-transform:uppercase;font-weight:400;line-height:1.05;margin:20px 0 4px}
+.sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.sheet{background:var(--weiss);border:1px solid var(--linie);border-radius:22px;padding:26px 24px;margin:-18px auto 40px;max-width:680px;box-shadow:0 2px 6px rgba(18,22,26,.05),0 22px 44px -24px rgba(18,22,26,.3)}
+h2{font-size:16.5px;font-weight:600;letter-spacing:-.01em;margin:28px 0 6px;padding-top:2px}
+h2:first-child{margin-top:0}
+p,li{font-size:15px;color:var(--ink-weich)}
+ul{padding-left:20px;margin-top:5px}
+li{margin-top:4px}
+li::marker{color:var(--emaille)}
+address{font-style:normal;font-size:15px;background:var(--papier);border-radius:12px;padding:14px 16px;display:inline-block;margin-top:4px}
+strong{color:var(--ink)}
+a{color:var(--emaille);text-underline-offset:3px}
+.stand{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--grau);margin-top:34px;border-top:1px solid var(--linie);padding-top:14px}
+@media(max-width:560px){.sheet{border-radius:20px;padding:22px 18px;margin:-16px 14px 30px}h1{font-size:29px}}
 </style>
 </head>
 <body>
-<div class="wrap">
-<a class="back" href="/">&larr; Zurück zur App</a>
-<h1>${title}</h1>
-<div class="sub">Nahdran</div>
-${body}
+<div class="hero">
+  <div class="wrap">
+    <a class="back" href="/">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12h-15"/><path d="m10.5 6-6 6 6 6"/></svg>
+      Zurück zur App
+    </a>
+    <h1>${title}</h1>
+    <div class="sub">Nahdran</div>
+  </div>
 </div>
+<main class="sheet">
+${body}
+</main>
 </body>
 </html>`;
 }
