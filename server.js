@@ -162,8 +162,8 @@ function eur(c) { return (c / 100).toFixed(2); }
 
 // expire old offers
 function expireOffers() {
-  db.prepare(`UPDATE offers SET status = 'expired' WHERE status = 'active' AND ends_at < datetime('now')`).run();
-  db.prepare(`UPDATE vouchers SET status = 'expired' WHERE status = 'active' AND expires_at < datetime('now')`).run();
+  db.prepare(`UPDATE offers SET status = 'expired' WHERE status = 'active' AND datetime(ends_at) < datetime('now')`).run();
+  db.prepare(`UPDATE vouchers SET status = 'expired' WHERE status = 'active' AND datetime(expires_at) < datetime('now')`).run();
 }
 setInterval(expireOffers, 30000);
 
@@ -225,7 +225,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
     JOIN merchants m ON m.id = o.merchant_id
     JOIN categories c ON c.id = m.category_id
     WHERE o.status = 'active'
-      AND o.ends_at > datetime('now')
+      AND datetime(o.ends_at) > datetime('now')
       AND o.quota_reserved < o.quota_total
     ORDER BY o.created_at DESC
   `).all();
@@ -257,7 +257,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
   const unfilteredOffers = db.prepare(`
     SELECT m.category_id, m.lat as mlat, m.lng as mlng
     FROM offers o JOIN merchants m ON m.id = o.merchant_id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now') AND o.quota_reserved < o.quota_total
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
   `).all();
   unfilteredOffers.forEach(o => {
     if (haversine(lat, lng, o.mlat, o.mlng) <= radius) {
@@ -317,7 +317,7 @@ app.get('/api/search', (req, res) => {
     FROM offers o
     JOIN merchants m ON m.id = o.merchant_id
     JOIN categories c ON c.id = m.category_id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now')
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now')
       AND (m.name LIKE ? OR o.title LIKE ? OR c.label LIKE ?)
     ORDER BY o.created_at DESC
   `).all(like, like, like);
@@ -347,7 +347,7 @@ app.get('/api/streets', (req, res) => {
   merchants.forEach(m => {
     m.current_offer = db.prepare(`
       SELECT id, title, ends_at FROM offers
-      WHERE merchant_id = ? AND status = 'active' AND ends_at > datetime('now') AND quota_reserved < quota_total
+      WHERE merchant_id = ? AND status = 'active' AND datetime(ends_at) > datetime('now') AND quota_reserved < quota_total
       ORDER BY created_at DESC LIMIT 1
     `).get(m.id) || null;
   });
@@ -419,7 +419,7 @@ app.get('/api/favourites', auth, (req, res) => {
   favs.forEach(f => {
     f.current_offer = db.prepare(`
       SELECT id, title, ends_at FROM offers
-      WHERE merchant_id = ? AND status = 'active' AND ends_at > datetime('now') AND quota_reserved < quota_total
+      WHERE merchant_id = ? AND status = 'active' AND datetime(ends_at) > datetime('now') AND quota_reserved < quota_total
       ORDER BY created_at DESC LIMIT 1
     `).get(f.merchant_id) || null;
   });
@@ -484,7 +484,7 @@ app.get('/api/geofences', auth, (req, res) => {
     SELECT DISTINCT m.id, m.name, m.lat, m.lng, m.category_id
     FROM merchants m
     JOIN offers o ON o.merchant_id = m.id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now') AND o.quota_reserved < o.quota_total
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
   `).all();
 
   merchants = merchants.map(m => ({
@@ -522,7 +522,7 @@ app.post('/api/push/simulate', auth, (req, res) => {
   let offers = db.prepare(`
     SELECT o.id, o.title, o.ends_at, m.name as merchant_name, m.lat, m.lng, m.id as merchant_id
     FROM offers o JOIN merchants m ON m.id = o.merchant_id
-    WHERE o.status = 'active' AND o.ends_at > datetime('now') AND o.quota_reserved < o.quota_total
+    WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
   `).all();
 
   offers = offers.map(o => ({ ...o, distance: Math.round(haversine(userLat, userLng, o.lat, o.lng)) }))
@@ -636,7 +636,7 @@ app.get('/api/merchant/stats', merchantAuth, (req, res) => {
   const merchant = db.prepare('SELECT * FROM merchants WHERE user_id = ?').get(req.user.id);
   if (!merchant) return res.status(404).json({ error: 'Kein Geschäft zugeordnet' });
 
-  const activeOffers = db.prepare("SELECT COUNT(*) as n FROM offers WHERE merchant_id = ? AND status = 'active' AND ends_at > datetime('now')").get(merchant.id).n;
+  const activeOffers = db.prepare("SELECT COUNT(*) as n FROM offers WHERE merchant_id = ? AND status = 'active' AND datetime(ends_at) > datetime('now')").get(merchant.id).n;
   const totalReserved = db.prepare("SELECT COALESCE(SUM(quota_reserved),0) as n FROM offers WHERE merchant_id = ?").get(merchant.id).n;
   const totalRedeemed = db.prepare("SELECT COUNT(*) as n FROM vouchers v JOIN offers o ON o.id = v.offer_id WHERE o.merchant_id = ? AND v.status = 'redeemed'").get(merchant.id).n;
   const totalExpired = db.prepare("SELECT COUNT(*) as n FROM vouchers v JOIN offers o ON o.id = v.offer_id WHERE o.merchant_id = ? AND v.status = 'expired'").get(merchant.id).n;

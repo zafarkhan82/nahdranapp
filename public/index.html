@@ -478,6 +478,10 @@ const AppCtx = createContext();
 // ─── Helpers ────────────────────────────────────────────────────────
 const euro = v => parseFloat(v).toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
 const walkMin = m => Math.max(1, Math.round(m / 75)) + ' Min.';
+// ab einem Kilometer lesbarer in km statt vierstelliger Meterzahl
+const dist = m => m < 1000
+  ? Math.round(m) + ' m'
+  : (m / 1000).toLocaleString('de-DE', { maximumFractionDigits: m < 10000 ? 1 : 0 }) + ' km';
 const timeLeft = iso => {
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return { text: 'abgelaufen', urgent: true };
@@ -683,7 +687,7 @@ function DealCard({ offer, onOpen, onFav }) {
         <h3>{offer.title}</h3>
         <span className="c-shop">{offer.merchant_name} · Nr. {offer.house_number || '–'}</span>
         <span className="c-meta">
-          <span className="pillet"><Icon name="pin" size={13} />{offer.distance} m</span>
+          <span className="pillet"><Icon name="pin" size={13} />{dist(offer.distance)}</span>
           <span className={`pillet${tl.urgent ? ' urgent' : ''}`}><Icon name="clock" size={13} />{tl.text}</span>
           <span className="c-price">
             {offer.price_after != null
@@ -758,7 +762,7 @@ function DealSheet({ offerId, onClose }) {
             </div>
 
             <div className="facts">
-              <div className="fact"><b>{distance} m</b><span>{walkMin(distance)} zu Fuß</span></div>
+              <div className="fact"><b>{dist(distance)}</b><span>{walkMin(distance)} zu Fuß</span></div>
               <div className="fact"><b className={tl.urgent ? 'urgent' : ''}>{tl.text}</b><span>Restzeit</span></div>
               <div className="fact"><b>{o.quota_remaining}</b><span>von {o.quota_total} frei</span></div>
             </div>
@@ -1031,7 +1035,7 @@ function VoucherBon({ v, onReload }) {
       <div className="perf"><i /></div>
       <div className="bon-in">
         <h3>{v.title}</h3>
-        <div className="addr">{v.street} {v.house_number || '–'} · {Math.round(haversineJS(geo.lat, geo.lng, v.mlat, v.mlng))} m</div>
+        <div className="addr">{v.street} {v.house_number || '–'} · {dist(haversineJS(geo.lat, geo.lng, v.mlat, v.mlng))}</div>
         <div className="bon-timer">
           <span>{used ? 'eingelöst um' : expired ? 'gültig bis' : 'noch gültig'}</span>
           <b className={tl.urgent && !used && !expired ? 'urgent' : ''}>
