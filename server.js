@@ -260,6 +260,28 @@ app.get('/api/auth/me', auth, (req, res) => {
   res.json({ user, merchant });
 });
 
+app.put('/api/auth/profile', auth, (req, res) => {
+  const { name, password, current_password } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Nutzer nicht gefunden' });
+
+  const newName = (name != null && String(name).trim()) ? String(name).trim() : user.name;
+  if (!newName) return res.status(400).json({ error: 'Name fehlt' });
+
+  let passwordHash = user.password_hash;
+  if (password != null && String(password).length > 0) {
+    if (!current_password || !bcrypt.compareSync(current_password, user.password_hash))
+      return res.status(401).json({ error: 'Aktuelles Passwort ist falsch' });
+    if (String(password).length < 6) return res.status(400).json({ error: 'Neues Passwort zu kurz (min. 6)' });
+    passwordHash = bcrypt.hashSync(String(password), 10);
+  }
+
+  db.prepare('UPDATE users SET name = ?, password_hash = ? WHERE id = ?').run(newName, passwordHash, user.id);
+  const updated = db.prepare('SELECT id, email, name, role, created_at FROM users WHERE id = ?').get(user.id);
+  const token = jwt.sign({ id: updated.id, email: updated.email, name: updated.name, role: updated.role }, SECRET, { expiresIn: '30d' });
+  res.json({ token, user: updated });
+});
+
 // ─── Feed ───────────────────────────────────────────────────────────────
 
 app.get('/api/feed', optionalAuth, (req, res) => {
@@ -732,6 +754,66 @@ app.post('/api/merchant/setup', merchantAuth, (req, res) => {
       address || '', street || '', house_number || 0, lat, lng, description || '', slug, 'pending');
 
   res.json(db.prepare('SELECT * FROM merchants WHERE id = ?').get(id));
+});
+
+app.put('/api/merchant/profile', merchantAuth, (req, res) => {
+  const merchant = db.prepare('SELECT * FROM merchants WHERE user_id = ?').get(req.user.id);
+  if (!merchant) return res.status(404).json({ error: 'Kein Geschäft zugeordnet' });
+
+  const { name, short, category_id, address, street, house_number, lat, lng, description, slug } = req.body;
+  if (!name || !category_id || lat == null || lng == null)
+    return res.status(400).json({ error: 'Geschäftsname, Kategorie und Standort sind Pflicht' });
+
+  const latN = parseFloat(lat), lngN = parseFloat(lng);
+  if (!Number.isFinite(latN) || !Number.isFinite(lngN))
+    return res.status(400).json({ error: 'Ungültige Koordinaten' });
+
+  const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(category_id);
+  if (!cat) return res.status(400).json({ error: 'Kategorie ungültig' });
+
+  let newSlug = merchant.slug;
+  if (slug != null && String(slug).trim()) {
+    const requested = slugify(String(slug).trim());
+    const clash = db.prepare('SELECT id FROM merchants WHERE slug = ? AND id != ?').get(requested, merchant.id);
+    if (clash) return res.status(409).json({ error: 'Diese URL ist bereits vergeben' });
+    newSlug = requested;
+  }
+
+  db.prepare(`UPDATE merchants SET
+    name = ?, short = ?, category_id = ?, address = ?, street = ?, house_number = ?,
+    lat = ?, lng = ?, description = ?, slug = ?
+    WHERE id = ?`)
+    .run(
+      String(name).trim(),
+      (short && String(short).trim()) || String(name).trim().slice(0, 2).toUpperCase(),
+      category_id,
+      address != null ? String(address) : '',
+      street != null ? String(street) : '',
+      parseInt(house_number, 10) || 0,
+      latN, lngN,
+      description != null ? String(description).slice(0, 2000) : '',
+      newSlug,
+      merchant.id
+    );
+
+  res.json(db.prepare('SELECT * FROM merchants WHERE id = ?').get(merchant.id));
+});
+
+app.get('/api/merchant/shop-preview', merchantAuth, (req, res) => {
+  const merchant = db.prepare(`
+    SELECT m.*, c.label as category_label, c.color as category_color
+    FROM merchants m JOIN categories c ON c.id = m.category_id
+    WHERE m.user_id = ?
+  `).get(req.user.id);
+  if (!merchant) return res.status(404).json({ error: 'Kein Geschäft zugeordnet' });
+
+  const offers = db.prepare(`
+    SELECT id, title, ends_at, status, quota_total, quota_reserved FROM offers WHERE merchant_id = ?
+      AND status = 'active' AND datetime(ends_at) > datetime('now') AND quota_reserved < quota_total
+    ORDER BY created_at DESC LIMIT 6
+  `).all(merchant.id);
+
+  res.json({ merchant, offers });
 });
 
 // ─── Shop (öffentliche Geschäftsseite) ──────────────────────────────────
