@@ -157,6 +157,58 @@ function merchantAuth(req, res, next) {
   });
 }
 
+function adminAuth(req, res, next) {
+  auth(req, res, () => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur für Administratoren' });
+    next();
+  });
+}
+
+function slugify(name) {
+  const s = String(name || 'geschaeft').toLowerCase()
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 56);
+  return s || 'geschaeft';
+}
+
+function uniqueMerchantSlug(base, excludeId) {
+  let slug = slugify(base);
+  let n = 2;
+  const taken = (s) => excludeId
+    ? db.prepare('SELECT 1 FROM merchants WHERE slug = ? AND id != ?').get(s, excludeId)
+    : db.prepare('SELECT 1 FROM merchants WHERE slug = ?').get(s);
+  while (taken(slug)) {
+    slug = `${slugify(base).slice(0, 48)}-${n++}`;
+  }
+  return slug;
+}
+
+const MERCHANT_ACTIVE = "m.activation_status = 'active'";
+
+function migrateMerchants() {
+  const cols = db.prepare('PRAGMA table_info(merchants)').all().map(c => c.name);
+  let legacyActivate = false;
+  if (!cols.includes('activation_status')) {
+    db.exec("ALTER TABLE merchants ADD COLUMN activation_status TEXT NOT NULL DEFAULT 'pending'");
+    legacyActivate = true;
+  }
+  if (!cols.includes('slug')) db.exec('ALTER TABLE merchants ADD COLUMN slug TEXT');
+  if (!cols.includes('activated_at')) db.exec('ALTER TABLE merchants ADD COLUMN activated_at TEXT');
+
+  const needSlug = db.prepare("SELECT id, name FROM merchants WHERE slug IS NULL OR slug = ''").all();
+  for (const m of needSlug) {
+    db.prepare('UPDATE merchants SET slug = ? WHERE id = ?').run(uniqueMerchantSlug(m.name, m.id), m.id);
+  }
+  if (legacyActivate) {
+    db.prepare("UPDATE merchants SET activation_status = 'active', activated_at = datetime('now')").run();
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_merchants_slug ON merchants(slug)');
+}
+
+migrateMerchants();
+
 function cents(eur) { return Math.round(eur * 100); }
 function eur(c) { return (c / 100).toFixed(2); }
 
@@ -179,7 +231,7 @@ app.post('/api/auth/register', (req, res) => {
 
   const id = genId();
   const hash = bcrypt.hashSync(password, 10);
-  const userRole = role === 'merchant' ? 'merchant' : 'consumer';
+  const userRole = role === 'merchant' ? 'merchant' : 'consumer'; // admin nur per Seed/Env
   db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)').run(id, email, hash, name, userRole);
   db.prepare('INSERT INTO push_settings (user_id) VALUES (?)').run(id);
 
@@ -218,7 +270,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
   const category = req.query.category || null;
 
   let offers = db.prepare(`
-    SELECT o.*, m.name as merchant_name, m.short as merchant_short,
+    SELECT o.*, m.name as merchant_name, m.short as merchant_short, m.slug as merchant_slug,
            m.house_number, m.street, m.lat as mlat, m.lng as mlng,
            m.category_id, c.label as category_label, c.color as category_color
     FROM offers o
@@ -227,6 +279,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
     WHERE o.status = 'active'
       AND datetime(o.ends_at) > datetime('now')
       AND o.quota_reserved < o.quota_total
+      AND ${MERCHANT_ACTIVE}
     ORDER BY o.created_at DESC
   `).all();
 
@@ -258,6 +311,7 @@ app.get('/api/feed', optionalAuth, (req, res) => {
     SELECT m.category_id, m.lat as mlat, m.lng as mlng
     FROM offers o JOIN merchants m ON m.id = o.merchant_id
     WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
+      AND ${MERCHANT_ACTIVE}
   `).all();
   unfilteredOffers.forEach(o => {
     if (haversine(lat, lng, o.mlat, o.mlng) <= radius) {
@@ -278,9 +332,9 @@ app.get('/api/feed', optionalAuth, (req, res) => {
 
 app.get('/api/offers/:id', optionalAuth, (req, res) => {
   const o = db.prepare(`
-    SELECT o.*, m.name as merchant_name, m.short as merchant_short,
+    SELECT o.*, m.name as merchant_name, m.short as merchant_short, m.slug as merchant_slug,
            m.house_number, m.street, m.address, m.lat as mlat, m.lng as mlng,
-           m.category_id, m.description as merchant_description,
+           m.category_id, m.description as merchant_description, m.activation_status,
            c.label as category_label, c.color as category_color
     FROM offers o
     JOIN merchants m ON m.id = o.merchant_id
@@ -288,6 +342,7 @@ app.get('/api/offers/:id', optionalAuth, (req, res) => {
     WHERE o.id = ?
   `).get(req.params.id);
   if (!o) return res.status(404).json({ error: 'Angebot nicht gefunden' });
+  if (o.activation_status !== 'active') return res.status(404).json({ error: 'Angebot nicht verfügbar' });
 
   o.terms = JSON.parse(o.terms || '[]');
   o.price_before = eur(o.price_before);
@@ -311,13 +366,14 @@ app.get('/api/search', (req, res) => {
 
   const like = `%${q}%`;
   let offers = db.prepare(`
-    SELECT o.*, m.name as merchant_name, m.short as merchant_short,
+    SELECT o.*, m.name as merchant_name, m.short as merchant_short, m.slug as merchant_slug,
            m.house_number, m.street, m.lat as mlat, m.lng as mlng,
            m.category_id, c.label as category_label, c.color as category_color
     FROM offers o
     JOIN merchants m ON m.id = o.merchant_id
     JOIN categories c ON c.id = m.category_id
     WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now')
+      AND ${MERCHANT_ACTIVE}
       AND (m.name LIKE ? OR o.title LIKE ? OR c.label LIKE ?)
     ORDER BY o.created_at DESC
   `).all(like, like, like);
@@ -340,7 +396,7 @@ app.get('/api/streets', (req, res) => {
   const merchants = db.prepare(`
     SELECT m.*, c.label as category_label, c.color as category_color
     FROM merchants m JOIN categories c ON c.id = m.category_id
-    WHERE m.street = ? ORDER BY m.house_number
+    WHERE m.street = ? AND ${MERCHANT_ACTIVE} ORDER BY m.house_number
   `).all(street);
 
   // attach current offers
@@ -361,6 +417,8 @@ app.post('/api/vouchers', auth, (req, res) => {
   const { offerId } = req.body;
   const offer = db.prepare("SELECT * FROM offers WHERE id = ? AND status = 'active'").get(offerId);
   if (!offer) return res.status(404).json({ error: 'Angebot nicht verfügbar' });
+  const merch = db.prepare("SELECT activation_status FROM merchants WHERE id = ?").get(offer.merchant_id);
+  if (!merch || merch.activation_status !== 'active') return res.status(403).json({ error: 'Geschäft noch nicht freigeschaltet' });
   if (offer.quota_reserved >= offer.quota_total) return res.status(409).json({ error: 'Kontingent erschöpft' });
 
   const existing = db.prepare("SELECT id FROM vouchers WHERE offer_id = ? AND user_id = ? AND status = 'active'").get(offerId, req.user.id);
@@ -406,13 +464,13 @@ app.get('/api/vouchers', auth, (req, res) => {
 
 app.get('/api/favourites', auth, (req, res) => {
   const favs = db.prepare(`
-    SELECT f.*, m.name as merchant_name, m.short as merchant_short,
+    SELECT f.*, m.name as merchant_name, m.short as merchant_short, m.slug as merchant_slug,
            m.house_number, m.street, m.lat, m.lng,
            m.category_id, c.label as category_label, c.color as category_color
     FROM favourites f
     JOIN merchants m ON m.id = f.merchant_id
     JOIN categories c ON c.id = m.category_id
-    WHERE f.user_id = ?
+    WHERE f.user_id = ? AND ${MERCHANT_ACTIVE}
     ORDER BY f.created_at DESC
   `).all(req.user.id);
 
@@ -428,8 +486,9 @@ app.get('/api/favourites', auth, (req, res) => {
 
 app.post('/api/favourites', auth, (req, res) => {
   const { merchantId } = req.body;
-  const merchant = db.prepare('SELECT id FROM merchants WHERE id = ?').get(merchantId);
+  const merchant = db.prepare('SELECT id, activation_status FROM merchants WHERE id = ?').get(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Geschäft nicht gefunden' });
+  if (merchant.activation_status !== 'active') return res.status(403).json({ error: 'Geschäft noch nicht freigeschaltet' });
   const exists = db.prepare('SELECT 1 FROM favourites WHERE user_id = ? AND merchant_id = ?').get(req.user.id, merchantId);
   if (exists) return res.json({ status: 'already_exists' });
   db.prepare('INSERT INTO favourites (user_id, merchant_id) VALUES (?, ?)').run(req.user.id, merchantId);
@@ -485,6 +544,7 @@ app.get('/api/geofences', auth, (req, res) => {
     FROM merchants m
     JOIN offers o ON o.merchant_id = m.id
     WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
+      AND ${MERCHANT_ACTIVE}
   `).all();
 
   merchants = merchants.map(m => ({
@@ -523,6 +583,7 @@ app.post('/api/push/simulate', auth, (req, res) => {
     SELECT o.id, o.title, o.ends_at, m.name as merchant_name, m.lat, m.lng, m.id as merchant_id
     FROM offers o JOIN merchants m ON m.id = o.merchant_id
     WHERE o.status = 'active' AND datetime(o.ends_at) > datetime('now') AND o.quota_reserved < o.quota_total
+      AND ${MERCHANT_ACTIVE}
   `).all();
 
   offers = offers.map(o => ({ ...o, distance: Math.round(haversine(userLat, userLng, o.lat, o.lng)) }))
@@ -571,6 +632,7 @@ app.get('/api/merchant/offers', merchantAuth, (req, res) => {
 app.post('/api/merchant/offers', merchantAuth, (req, res) => {
   const merchant = db.prepare('SELECT * FROM merchants WHERE user_id = ?').get(req.user.id);
   if (!merchant) return res.status(404).json({ error: 'Kein Geschäft zugeordnet' });
+  if (merchant.activation_status !== 'active') return res.status(403).json({ error: 'Geschäft wartet auf Freigabe durch den Betreiber' });
 
   const { title, description, terms, price_before, price_after, is_free, quota_total, duration_hours } = req.body;
   if (!title || !price_before) return res.status(400).json({ error: 'Titel und Originalpreis benötigt' });
@@ -663,12 +725,102 @@ app.post('/api/merchant/setup', merchantAuth, (req, res) => {
   if (!name || !category_id || !lat || !lng) return res.status(400).json({ error: 'Pflichtfelder fehlen' });
 
   const id = genId();
-  db.prepare(`INSERT INTO merchants (id, user_id, name, short, category_id, address, street, house_number, lat, lng, description)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+  const slug = uniqueMerchantSlug(name, null);
+  db.prepare(`INSERT INTO merchants (id, user_id, name, short, category_id, address, street, house_number, lat, lng, description, slug, activation_status)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(id, req.user.id, name, short || name.slice(0, 2).toUpperCase(), category_id,
-      address || '', street || '', house_number || 0, lat, lng, description || '');
+      address || '', street || '', house_number || 0, lat, lng, description || '', slug, 'pending');
 
   res.json(db.prepare('SELECT * FROM merchants WHERE id = ?').get(id));
+});
+
+// ─── Shop (öffentliche Geschäftsseite) ──────────────────────────────────
+
+app.get('/api/shops/:slug', optionalAuth, (req, res) => {
+  expireOffers();
+  const m = db.prepare(`
+    SELECT m.*, c.label as category_label, c.color as category_color
+    FROM merchants m JOIN categories c ON c.id = m.category_id
+    WHERE m.slug = ? AND m.activation_status = 'active'
+  `).get(req.params.slug);
+  if (!m) return res.status(404).json({ error: 'Geschäft nicht gefunden' });
+
+  const offers = db.prepare(`
+    SELECT * FROM offers WHERE merchant_id = ?
+      AND status = 'active' AND datetime(ends_at) > datetime('now') AND quota_reserved < quota_total
+    ORDER BY created_at DESC
+  `).all(m.id).map(o => ({
+    ...o,
+    terms: JSON.parse(o.terms || '[]'),
+    price_before: eur(o.price_before),
+    price_after: o.price_after != null ? eur(o.price_after) : null,
+    quota_remaining: o.quota_total - o.quota_reserved
+  }));
+
+  const pastOffers = db.prepare(`
+    SELECT id, title, ends_at, status FROM offers WHERE merchant_id = ?
+      AND (status != 'active' OR datetime(ends_at) <= datetime('now'))
+    ORDER BY ends_at DESC LIMIT 12
+  `).all(m.id);
+
+  if (req.user) {
+    m.is_favourite = !!db.prepare('SELECT 1 FROM favourites WHERE user_id = ? AND merchant_id = ?').get(req.user.id, m.id);
+  }
+
+  res.json({ merchant: m, offers, pastOffers });
+});
+
+// ─── Admin ──────────────────────────────────────────────────────────────
+
+app.get('/api/admin/merchants', adminAuth, (req, res) => {
+  const status = req.query.status || 'pending';
+  const allowed = ['pending', 'active', 'rejected', 'all'];
+  const st = allowed.includes(status) ? status : 'pending';
+  const rows = db.prepare(`
+    SELECT m.*, c.label as category_label, u.email as owner_email, u.name as owner_name, u.created_at as user_created_at
+    FROM merchants m
+    JOIN users u ON u.id = m.user_id
+    JOIN categories c ON c.id = m.category_id
+    WHERE (? = 'all' OR m.activation_status = ?)
+    ORDER BY m.created_at DESC
+  `).all(st, st);
+  res.json({ merchants: rows });
+});
+
+app.post('/api/admin/merchants/:id/activate', adminAuth, (req, res) => {
+  const m = db.prepare('SELECT * FROM merchants WHERE id = ?').get(req.params.id);
+  if (!m) return res.status(404).json({ error: 'Geschäft nicht gefunden' });
+  db.prepare("UPDATE merchants SET activation_status = 'active', activated_at = datetime('now') WHERE id = ?").run(m.id);
+  res.json(db.prepare('SELECT * FROM merchants WHERE id = ?').get(m.id));
+});
+
+app.post('/api/admin/merchants/:id/reject', adminAuth, (req, res) => {
+  const m = db.prepare('SELECT * FROM merchants WHERE id = ?').get(req.params.id);
+  if (!m) return res.status(404).json({ error: 'Geschäft nicht gefunden' });
+  db.prepare("UPDATE merchants SET activation_status = 'rejected' WHERE id = ?").run(m.id);
+  db.prepare("UPDATE offers SET status = 'paused' WHERE merchant_id = ? AND status = 'active'").run(m.id);
+  res.json(db.prepare('SELECT * FROM merchants WHERE id = ?').get(m.id));
+});
+
+// ─── Merchant: Gutscheine (Händlerübersicht) ────────────────────────────
+
+app.get('/api/merchant/vouchers', merchantAuth, (req, res) => {
+  const merchant = db.prepare('SELECT * FROM merchants WHERE user_id = ?').get(req.user.id);
+  if (!merchant) return res.status(404).json({ error: 'Kein Geschäft zugeordnet' });
+
+  const vouchers = db.prepare(`
+    SELECT v.*, o.title, o.ends_at as offer_ends_at
+    FROM vouchers v
+    JOIN offers o ON o.id = v.offer_id
+    WHERE o.merchant_id = ?
+    ORDER BY v.reserved_at DESC
+  `).all(merchant.id);
+
+  const active = vouchers.filter(v => v.status === 'active');
+  const redeemed = vouchers.filter(v => v.status === 'redeemed');
+  const expired = vouchers.filter(v => v.status === 'expired');
+
+  res.json({ active, redeemed, expired, total: vouchers.length });
 });
 
 // ─── Categories ─────────────────────────────────────────────────────────
@@ -1001,7 +1153,7 @@ function seed() {
   ];
 
   const insertUser = db.prepare('INSERT INTO users (id,email,password_hash,name,role) VALUES (?,?,?,?,?)');
-  const insertMerch = db.prepare('INSERT INTO merchants (id,user_id,name,short,category_id,street,house_number,lat,lng) VALUES (?,?,?,?,?,?,?,?,?)');
+  const insertMerch = db.prepare('INSERT INTO merchants (id,user_id,name,short,category_id,street,house_number,lat,lng,slug,activation_status,activated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime(\'now\'))');
   const insertOffer = db.prepare('INSERT INTO offers (id,merchant_id,title,terms,price_before,price_after,is_free,quota_total,ends_at) VALUES (?,?,?,?,?,?,?,?,?)');
   const insertPS = db.prepare('INSERT INTO push_settings (user_id) VALUES (?)');
 
@@ -1015,7 +1167,8 @@ function seed() {
       const uid = genId(), mid = genId();
       insertUser.run(uid, d.email, bcrypt.hashSync(d.pw, 10), d.name, 'merchant');
       insertPS.run(uid);
-      insertMerch.run(mid, uid, d.name, d.m.short, d.m.cat, d.m.street, d.m.hnr, d.m.lat, d.m.lng);
+      const slug = uniqueMerchantSlug(d.name, mid);
+      insertMerch.run(mid, uid, d.name, d.m.short, d.m.cat, d.m.street, d.m.hnr, d.m.lat, d.m.lng, slug, 'active');
       d.offers.forEach(o => {
         const oid = genId();
         const ends = new Date(Date.now() + (o.h || 4) * 3600000).toISOString();
@@ -1028,7 +1181,26 @@ function seed() {
   console.log('Seed complete: 17 merchants, 17 offers, 1 demo consumer (kunde@demo.de / demo123)');
 }
 
+function ensureAdminUser() {
+  const email = process.env.ADMIN_EMAIL || 'admin@50meter.de';
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existing) return;
+  const pw = process.env.ADMIN_PASSWORD || 'admin50meter';
+  const id = genId();
+  db.prepare('INSERT INTO users (id, email, password_hash, name, role) VALUES (?,?,?,?,?)')
+    .run(id, email, bcrypt.hashSync(pw, 10), 'Nahdran Admin', 'admin');
+  db.prepare('INSERT INTO push_settings (user_id) VALUES (?)').run(id);
+  console.log(`Admin angelegt: ${email} (Passwort: ${process.env.ADMIN_PASSWORD ? '(aus ENV)' : 'admin50meter'})`);
+}
+
 seed();
+ensureAdminUser();
+
+// ─── SPA: Geschäftsseiten ───────────────────────────────────────────────
+
+app.get('/geschaeft/:slug', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // ─── Start ──────────────────────────────────────────────────────────────
 
